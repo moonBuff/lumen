@@ -1626,6 +1626,8 @@ def test_reviewer_skeleton_docs_exist():
     assert "Architecture map" in review_text
     assert "Benchmark evidence" in review_text
     assert "Sample run artifact list" in review_text
+    assert "ModelContext" in review_text
+    assert "transcript" in review_text
 
     architecture_text = architecture.read_text(encoding="utf-8")
     assert "Agent Harness v1" in architecture_text

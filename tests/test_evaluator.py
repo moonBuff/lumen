@@ -129,6 +129,19 @@ def test_run_fixed_benchmark_reports_metadata_and_success_definition(tmp_path):
         assert row["expected_artifact_exists"] is True
         assert row["non_failure_stop_reason"] is True
         assert row["stop_reason"] == "final_answer_returned"
+        assert row["model_context_sections"] == [
+            "prefix",
+            "checkpoint_context",
+            "memory",
+            "relevant_memory",
+            "transcript",
+            "current_request",
+        ]
+        assert row["model_context_section_count"] == 6
+        assert row["context_block_order"] == ["system_instructions", "tool_specs", "tool_examples", "workspace_context"]
+        assert row["transcript_rendered_chars"] > 0
+        assert row["memory_rendered_chars"] > 0
+        assert row["report"]["model_context"]["section_order"] == row["model_context_sections"]
 
 
 def test_run_fixed_benchmark_covers_recovery_and_durable_contract_rows(tmp_path):

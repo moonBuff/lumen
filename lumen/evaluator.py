@@ -476,6 +476,7 @@ class BenchmarkEvaluator:
         task_state_path = agent.run_store.task_state_path(task_state)
         report_path = agent.run_store.report_path(task_state)
         report = agent.run_store.load_report(task_state.run_id)
+        model_context = _model_context_summary(report)
 
         artifact_path = _artifact_path_for_task(task)
         artifact_file = fixture_copy_root / artifact_path
@@ -536,6 +537,11 @@ class BenchmarkEvaluator:
             "initial_memory_empty": initial_memory_empty,
             "initial_task_summary_empty": initial_task_summary_empty,
             "initial_episodic_notes_empty": initial_episodic_notes_empty,
+            "model_context_sections": model_context["sections"],
+            "model_context_section_count": model_context["section_count"],
+            "context_block_order": model_context["context_block_order"],
+            "transcript_rendered_chars": model_context["transcript_rendered_chars"],
+            "memory_rendered_chars": model_context["memory_rendered_chars"],
             "task_state": task_state.to_dict(),
             "report": report,
         }
@@ -571,6 +577,18 @@ def _verifier_command(command):
     if command.startswith("python3 "):
         return subprocess.list2cmdline([sys.executable]) + command[len("python3") :]
     return command
+
+
+def _model_context_summary(report):
+    model_context = dict(report.get("model_context", {}) or {})
+    rendered_chars = dict(model_context.get("rendered_chars_by_section", {}) or {})
+    return {
+        "sections": list(model_context.get("section_order", [])),
+        "section_count": int(model_context.get("section_count", 0) or 0),
+        "context_block_order": list(model_context.get("context_block_order", [])),
+        "transcript_rendered_chars": int(rendered_chars.get("transcript", 0) or 0),
+        "memory_rendered_chars": int(rendered_chars.get("memory", 0) or 0),
+    }
 
 
 def run_fixed_benchmark(

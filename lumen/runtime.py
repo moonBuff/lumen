@@ -1195,11 +1195,25 @@ class Lumen:
             "checkpoint_id": task_state.checkpoint_id,
             "resume_status": task_state.resume_status,
             "task_state": task_state.to_dict(),
+            "model_context": self.report_model_context(),
             "prompt_metadata": self.last_prompt_metadata,
             "durable_promotions": list(self.last_durable_promotions),
             "durable_rejections": list(self.last_durable_rejections),
             "durable_superseded": list(self.last_durable_superseded),
             "redacted_env": self.detected_secret_env_summary(),
+        }
+
+    def report_model_context(self):
+        model_context = dict((self.last_prompt_metadata or {}).get("model_context", {}) or {})
+        sections = dict(model_context.get("sections", {}) or {})
+        return {
+            "section_order": list(model_context.get("section_order", [])),
+            "section_count": int(model_context.get("section_count", 0) or 0),
+            "rendered_chars_by_section": {
+                name: int((section or {}).get("rendered_chars", 0) or 0)
+                for name, section in sections.items()
+            },
+            "context_block_order": list((self.last_prompt_metadata or {}).get("context_block_order", [])),
         }
 
     def tool_example(self, name):

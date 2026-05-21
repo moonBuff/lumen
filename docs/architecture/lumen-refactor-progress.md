@@ -14,8 +14,9 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Structured model context | Completed |
 | Explicit context blocks | Completed |
 | Transcript/session cleanup | Completed |
+| Evaluation artifact terminology | Completed |
 | Context architecture refactor | In progress |
-| Full test status | `106 passed, 1 skipped, 6 warnings` after Phase 5 |
+| Full test status | `106 passed, 1 skipped, 6 warnings` after Phase 6 |
 
 ## Phase Tracker
 
@@ -27,7 +28,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 3 | Structured ModelContext | Completed | Context sections are now structured before prompt rendering. |
 | 4 | Explicit Context Blocks | Completed | Stable prompt context is split into explicit blocks and checkpoint context is a separate section. |
 | 5 | Transcript, Memory, and Session Cleanup | Completed | Session conversation state now uses `transcript`; memory remains a separate distilled store. |
-| 6 | Evaluation and Artifact Terminology Cleanup | Not started | Pending. |
+| 6 | Evaluation and Artifact Terminology Cleanup | Completed | Reports and benchmark rows now expose model-context sections and context-block order. |
 | 7 | Portfolio Polish | Not started | Pending. |
 
 ## Progress Entries
@@ -257,6 +258,40 @@ Risks / follow-ups:
 
 - Existing local sessions that still contain `history` should be reset for this pre-release refactor; the runtime does not keep a normal alias.
 - Phase 6 should finish terminology cleanup in reports and review-pack presentation where useful.
+
+### 2026-05-21: Phase 6 Completed
+
+Scope:
+
+- Added a top-level `model_context` summary to run reports.
+- Added model-context section order, section count, context-block order, transcript rendered chars, and memory rendered chars to benchmark rows.
+- Updated evaluator tests to assert the benchmark artifact exposes the current context architecture.
+- Updated review-pack docs to describe the final ModelContext, transcript, memory, trace, and report boundaries.
+- Updated runtime concepts so ModelContext points to the current implementation.
+- Kept deterministic fake-model benchmark behavior unchanged.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `docs/architecture/runtime-concepts.md`
+- `docs/review-pack/README.md`
+- `lumen/evaluator.py`
+- `lumen/runtime.py`
+- `tests/test_evaluator.py`
+- `tests/test_lumen.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_evaluator.py -q` -> `8 passed`.
+- `uv run python -m pytest tests/test_lumen.py -q` -> `59 passed`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+- `uv run python -m pytest -q` -> `106 passed, 1 skipped, 6 warnings`.
+- Fresh benchmark artifact generation -> `12 passed`, `pass_rate: 1.0`, model context sections exposed in rows.
+
+Risks / follow-ups:
+
+- Phase 7 should polish README and portfolio-facing documentation, then run a fresh clone style verification.
+- `prefix_*` cache metadata remains in reports for continuity; context-block metadata is now also available for architecture review.
 
 ## Update Template
 

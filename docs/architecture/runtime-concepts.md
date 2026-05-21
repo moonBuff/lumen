@@ -42,7 +42,7 @@ The runtime remains single-agent by design. Lumen does not need a graph schedule
 | `TaskState` | Execution control state for one run: attempts, tool calls, stop reason, checkpoint id, and pending resume information. | `lumen.task_state.TaskState`. |
 | `Transcript` | User, assistant, and tool interaction history inside a session. It records conversation flow, not distilled knowledge. | Stored as session `transcript` and rendered by the context manager. |
 | `Memory` | Reusable knowledge distilled from prior activity or durable notes. Memory should summarize or reference useful facts instead of duplicating the transcript. | `lumen.memory.MemoryManager` and related memory records. |
-| `ModelContext` | A structured set of sections prepared for the model on a turn: instructions, tools, workspace, transcript slice, memory, task state hints, and checkpoint context. | Target abstraction for Phase 3. Current behavior is assembled through context and prompt helpers. |
+| `ModelContext` | A structured set of sections prepared for the model on a turn: instructions, tools, workspace, transcript slice, memory, task state hints, and checkpoint context. | `lumen.model_context` and `lumen.context_manager.ContextManager`. |
 | `Prompt` | The final serialized text sent to the model. It is derived from `ModelContext`. | Current rendered model input produced before `ModelClient.complete()`. |
 | `Trace` | Append-only audit log for what the runtime did. Trace is for debugging, evaluation, and review; it is not model context by default. | `.lumen/runs/<run_id>/trace.jsonl`. |
 | `Report` | Final run summary artifact with outcome, metrics, and useful metadata. | `.lumen/runs/<run_id>/report.json`. |
