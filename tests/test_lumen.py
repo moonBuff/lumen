@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 import lumen as lumen_pkg
 from lumen import (
     AnthropicCompatibleModelClient,
@@ -301,7 +303,7 @@ def test_welcome_screen_keeps_box_shape_for_long_paths(tmp_path):
     assert len(lines) >= 5
     assert len({len(line) for line in lines}) == 1
     assert "..." in welcome
-    assert "(  o o  )" in welcome
+    assert "| .-. |" in welcome
     assert "MINI-CODING-AGENT" not in welcome
     assert "MINI CODING AGENT" not in welcome
     assert "lumen" in welcome
@@ -631,6 +633,70 @@ def test_anthropic_compatible_client_extracts_first_text_block():
         result = client.complete("hello", 42)
 
     assert result == "<final>ok</final>"
+
+
+def test_anthropic_compatible_client_extracts_openai_style_message_content():
+    class FakeResponse:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "<final>ok</final>",
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    client = AnthropicCompatibleModelClient(
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com/anthropic",
+        api_key="sk-test",
+        temperature=0.2,
+        timeout=30,
+    )
+
+    with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        result = client.complete("hello", 42)
+
+    assert result == "<final>ok</final>"
+
+
+def test_anthropic_compatible_client_reports_unrecognized_response_shape():
+    class FakeResponse:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps({"content": [{"type": "thinking", "thinking": "hidden"}]}).encode("utf-8")
+
+    client = AnthropicCompatibleModelClient(
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com/anthropic",
+        api_key="sk-test",
+        temperature=0.2,
+        timeout=30,
+    )
+
+    with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with pytest.raises(RuntimeError, match=r"content_types=\[thinking\]"):
+            client.complete("hello", 42)
 
 
 def test_build_agent_uses_openai_provider_and_model_override(tmp_path):

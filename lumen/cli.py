@@ -32,10 +32,13 @@ DEFAULT_SECRET_ENV_NAMES = (
 )
 
 WELCOME_ART = (
-    "        /\\___/\\\\",
-    "       (  o o  )",
-    "       /   ^   \\\\",
-    "      /|       |\\\\",
+    "          .-.          ",
+    "         /   \\         ",
+    "        | .-. |        ",
+    "        | | | |        ",
+    "        | '-' |        ",
+    "         \\___/         ",
+    "        /_____\\        ",
 )
 WELCOME_NAME = "lumen"
 WELCOME_SUBTITLE = "local coding agent"

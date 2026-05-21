@@ -350,13 +350,71 @@ class OpenAICompatibleModelClient:
         return _extract_openai_text(data)
 
 
-def _extract_anthropic_text(data):
-    for item in data.get("content", []):
-        if isinstance(item, dict) and item.get("type") == "text":
+def _extract_text_from_content_blocks(content):
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type in (None, "text", "output_text"):
             text = item.get("text")
             if isinstance(text, str) and text:
+                parts.append(text)
+    return "".join(parts)
+
+
+def _extract_anthropic_text(data):
+    text = _extract_text_from_content_blocks(data.get("content"))
+    if text:
+        return text
+
+    for key in ("completion", "output_text"):
+        text = data.get(key)
+        if isinstance(text, str) and text:
+            return text
+
+    choices = data.get("choices")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            text = choice.get("text")
+            if isinstance(text, str) and text:
+                return text
+            message = choice.get("message")
+            if isinstance(message, dict):
+                text = _extract_text_from_content_blocks(message.get("content"))
+                if text:
+                    return text
+
+    output = data.get("output")
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            text = _extract_text_from_content_blocks(item.get("content"))
+            if text:
                 return text
     return ""
+
+
+def _anthropic_response_shape(data):
+    keys = ", ".join(sorted(str(key) for key in data.keys())) or "none"
+    content = data.get("content")
+    if isinstance(content, list):
+        content_shape = ", ".join(
+            str(item.get("type", "dict")) if isinstance(item, dict) else type(item).__name__
+            for item in content[:5]
+        )
+        return f"keys=[{keys}], content_types=[{content_shape or 'empty'}]"
+    return f"keys=[{keys}], content_type={type(content).__name__}"
 
 
 class AnthropicCompatibleModelClient:
@@ -438,4 +496,7 @@ class AnthropicCompatibleModelClient:
         text = _extract_anthropic_text(data)
         if text:
             return text
-        raise RuntimeError("Anthropic-compatible error: could not extract text from response")
+        raise RuntimeError(
+            "Anthropic-compatible error: could not extract text from response "
+            f"({_anthropic_response_shape(data)})"
+        )
