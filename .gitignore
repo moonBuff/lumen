@@ -7,7 +7,6 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
-uv.lock
 
 # Packaging
 *.egg-info/
@@ -21,7 +20,7 @@ dist/
 htmlcov/
 
 # Temporary files
-.mini-coding-agent
+.lumen
 *.tmp
 *.temp
 *.swp
@@ -31,7 +30,7 @@ htmlcov/
 # Local scratch space
 tmp/
 .worktrees/
-.pico/
+.lumen/
 artifacts/
 readme_intro_locked/
 
@@ -40,11 +39,8 @@ readme_intro_locked/
 .env.*
 !.env.example
 
-# Local docs not intended for publication
-docs/
-
 # OS files
 .DS_Store
 
 # Packaging metadata
-pico.egg-info/
+lumen.egg-info/

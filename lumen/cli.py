@@ -1,6 +1,6 @@
 """命令行入口。
 
-这个模块负责把“用户怎么启动 pico”翻译成 runtime 能理解的对象：
+这个模块负责把“用户怎么启动 lumen”翻译成 runtime 能理解的对象：
 解析参数、挑模型后端、构建工作区快照、恢复或新建 session，
 最后进入 one-shot 或交互式循环。
 """
@@ -13,19 +13,19 @@ import textwrap
 
 from .config import load_project_env, provider_env
 from .models import AnthropicCompatibleModelClient, OllamaModelClient, OpenAICompatibleModelClient
-from .runtime import Pico, SessionStore
+from .runtime import Lumen, SessionStore
 from .workspace import WorkspaceContext, middle
 
 DEFAULT_SECRET_ENV_NAMES = (
-    "PICO_OPENAI_API_KEY",
+    "LUMEN_OPENAI_API_KEY",
     "OPENAI_API_KEY",
     "OPENAI_API_TOKEN",
-    "PICO_ANTHROPIC_API_KEY",
+    "LUMEN_ANTHROPIC_API_KEY",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
-    "PICO_DEEPSEEK_API_KEY",
+    "LUMEN_DEEPSEEK_API_KEY",
     "DEEPSEEK_API_KEY",
-    "PICO_RIGHT_CODES_API_KEY",
+    "LUMEN_RIGHT_CODES_API_KEY",
     "RIGHT_CODES_API_KEY",
     "GITHUB_PAT",
     "GH_PAT",
@@ -37,7 +37,7 @@ WELCOME_ART = (
     "       /   ^   \\\\",
     "      /|       |\\\\",
 )
-WELCOME_NAME = "pico"
+WELCOME_NAME = "lumen"
 WELCOME_SUBTITLE = "local coding agent"
 WELCOME_STATUS = "calm shell, ready for work"
 HELP_DETAILS = textwrap.dedent(
@@ -60,8 +60,7 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 DEFAULT_ANTHROPIC_BASE_URL = "https://www.right.codes/claude/v1"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic"
-LEGACY_SECRET_ENV_NAMES_VAR = "MINI_CODING_AGENT_SECRET_ENV_NAMES"
-SECRET_ENV_NAMES_VAR = "PICO_SECRET_ENV_NAMES"
+SECRET_ENV_NAMES_VAR = "LUMEN_SECRET_ENV_NAMES"
 
 
 def _effective_model(args, provider):
@@ -73,17 +72,17 @@ def _effective_model(args, provider):
     if explicit_model:
         return explicit_model
     if provider == "openai":
-        model = provider_env("PICO_OPENAI_MODEL", ("OPENAI_MODEL",))
+        model = provider_env("LUMEN_OPENAI_MODEL", ("OPENAI_MODEL",))
         if model:
             return model
         return DEFAULT_OPENAI_MODEL
     if provider == "anthropic":
-        model = provider_env("PICO_ANTHROPIC_MODEL", ("ANTHROPIC_MODEL",))
+        model = provider_env("LUMEN_ANTHROPIC_MODEL", ("ANTHROPIC_MODEL",))
         if model:
             return model
         return DEFAULT_ANTHROPIC_MODEL
     if provider == "deepseek":
-        model = provider_env("PICO_DEEPSEEK_MODEL", ("DEEPSEEK_MODEL",))
+        model = provider_env("LUMEN_DEEPSEEK_MODEL", ("DEEPSEEK_MODEL",))
         if model:
             return model
         return DEFAULT_DEEPSEEK_MODEL
@@ -94,8 +93,6 @@ def _configured_secret_names(args):
     configured_secret_names = set(DEFAULT_SECRET_ENV_NAMES)
     configured_secret_names.update(str(name).upper() for name in args.secret_env_names)
     extra_names = os.environ.get(SECRET_ENV_NAMES_VAR, "")
-    if not extra_names.strip():
-        extra_names = os.environ.get(LEGACY_SECRET_ENV_NAMES_VAR, "")
     if extra_names.strip():
         configured_secret_names.update(
             item.strip().upper()
@@ -111,8 +108,8 @@ def _build_model_client(args):
     # 真正的提示词格式、缓存支持、HTTP 协议差异，都封装在 models.py 里。
     if provider == "openai":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("PICO_OPENAI_API_BASE", ("OPENAI_API_BASE",), DEFAULT_OPENAI_BASE_URL)
-        api_key = provider_env("PICO_OPENAI_API_KEY", ("OPENAI_API_KEY",))
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_OPENAI_API_BASE", ("OPENAI_API_BASE",), DEFAULT_OPENAI_BASE_URL)
+        api_key = provider_env("LUMEN_OPENAI_API_KEY", ("OPENAI_API_KEY",))
         return OpenAICompatibleModelClient(
             model=model,
             base_url=base_url,
@@ -122,10 +119,10 @@ def _build_model_client(args):
         )
     if provider == "anthropic":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("PICO_ANTHROPIC_API_BASE", ("ANTHROPIC_API_BASE",), DEFAULT_ANTHROPIC_BASE_URL)
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_ANTHROPIC_API_BASE", ("ANTHROPIC_API_BASE",), DEFAULT_ANTHROPIC_BASE_URL)
         api_key = provider_env(
-            "PICO_ANTHROPIC_API_KEY",
-            ("ANTHROPIC_API_KEY", "PICO_RIGHT_CODES_API_KEY", "RIGHT_CODES_API_KEY", "PICO_OPENAI_API_KEY", "OPENAI_API_KEY"),
+            "LUMEN_ANTHROPIC_API_KEY",
+            ("ANTHROPIC_API_KEY", "LUMEN_RIGHT_CODES_API_KEY", "RIGHT_CODES_API_KEY", "LUMEN_OPENAI_API_KEY", "OPENAI_API_KEY"),
         )
         return AnthropicCompatibleModelClient(
             model=model,
@@ -136,8 +133,8 @@ def _build_model_client(args):
         )
     if provider == "deepseek":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("PICO_DEEPSEEK_API_BASE", ("DEEPSEEK_API_BASE",), DEFAULT_DEEPSEEK_BASE_URL)
-        api_key = provider_env("PICO_DEEPSEEK_API_KEY", ("DEEPSEEK_API_KEY",))
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_DEEPSEEK_API_BASE", ("DEEPSEEK_API_BASE",), DEFAULT_DEEPSEEK_BASE_URL)
+        api_key = provider_env("LUMEN_DEEPSEEK_API_KEY", ("DEEPSEEK_API_KEY",))
         return AnthropicCompatibleModelClient(
             model=model,
             base_url=base_url,
@@ -203,7 +200,7 @@ def build_welcome(agent, model, host):
 
 
 def build_agent(args):
-    """根据 CLI 参数装配出一个可运行的 Pico 实例。
+    """根据 CLI 参数装配出一个可运行的 Lumen 实例。
 
     为什么存在：
     命令行参数只是字符串和开关，runtime 需要的是已经装配好的对象图：
@@ -212,7 +209,7 @@ def build_agent(args):
 
     输入 / 输出：
     - 输入：`argparse` 解析后的 `args`
-    - 输出：一个新的 `Pico`，或一个从旧 session 恢复出来的 `Pico`
+    - 输出：一个新的 `Lumen`，或一个从旧 session 恢复出来的 `Lumen`
 
     在 agent 链路里的位置：
     它是整个程序启动链路里最靠近 runtime 的装配点。`main()` 先调它，
@@ -223,13 +220,13 @@ def build_agent(args):
     workspace = WorkspaceContext.build(args.cwd)
     load_project_env(workspace.repo_root)
     configured_secret_names = _configured_secret_names(args)
-    store = SessionStore(workspace.repo_root + "/.pico/sessions")
+    store = SessionStore(workspace.repo_root + "/.lumen/sessions")
     model = _build_model_client(args)
     session_id = args.resume
     if session_id == "latest":
         session_id = store.latest()
     if session_id:
-        return Pico.from_session(
+        return Lumen.from_session(
             model_client=model,
             workspace=workspace,
             session_store=store,
@@ -239,7 +236,7 @@ def build_agent(args):
             max_new_tokens=args.max_new_tokens,
             secret_env_names=configured_secret_names,
         )
-    return Pico(
+    return Lumen(
         model_client=model,
         workspace=workspace,
         session_store=store,
@@ -261,7 +258,7 @@ def build_arg_parser():
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name override. Defaults to qwen3.5:4b for Ollama, PICO_OPENAI_MODEL for openai, PICO_ANTHROPIC_MODEL for anthropic, and PICO_DEEPSEEK_MODEL for deepseek when set.",
+        help="Model name override. Defaults to qwen3.5:4b for Ollama, LUMEN_OPENAI_MODEL for openai, LUMEN_ANTHROPIC_MODEL for anthropic, and LUMEN_DEEPSEEK_MODEL for deepseek when set.",
     )
     parser.add_argument("--host", default=DEFAULT_OLLAMA_HOST, help="Ollama server URL.")
     parser.add_argument("--base-url", default=None, help="Provider API base URL for openai, anthropic, or deepseek.")
@@ -307,7 +304,7 @@ def main(argv=None):
         # 交互模式：每次读取一条用户输入，交给同一个 agent，
         # 因此 session history 和 working memory 会跨轮延续。
         try:
-            user_input = input("\npico> ").strip()
+            user_input = input("\nlumen> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("")
             return 0

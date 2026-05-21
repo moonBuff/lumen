@@ -1,0 +1,142 @@
+# Lumen Runtime Refactor Progress
+
+This log tracks the architecture cleanup and project identity work. Update it after every completed phase.
+
+## Current Status
+
+| Item | Status |
+| --- | --- |
+| Repository | `moonBuff/lumen` |
+| Local path | Current local checkout |
+| Planning baseline | Completed |
+| Code rename | Completed |
+| Context architecture refactor | Not started |
+| Full test status | `104 passed, 1 skipped, 6 warnings` after Phase 1 |
+
+## Phase Tracker
+
+| Phase | Name | Status | Result |
+| --- | --- | --- | --- |
+| 0 | Planning Baseline | Completed | Plan and progress docs were added. |
+| 1 | Project Identity Rename | Completed | Package, CLI, runtime paths, tests, docs, and benchmark terminology now use Lumen. |
+| 2 | Runtime Concept Documentation | Not started | Pending. |
+| 3 | Structured ModelContext | Not started | Pending. |
+| 4 | Explicit Context Blocks | Not started | Pending. |
+| 5 | Transcript, Memory, and Session Cleanup | Not started | Pending. |
+| 6 | Evaluation and Artifact Terminology Cleanup | Not started | Pending. |
+| 7 | Portfolio Polish | Not started | Pending. |
+
+## Progress Entries
+
+### 2026-05-21: Phase 0 Started
+
+Scope:
+
+- Create the architecture refactor plan.
+- Create this progress log.
+- No runtime code changes.
+- No package rename yet.
+
+Notes:
+
+- The goal is a clean lightweight runtime architecture, not a feature expansion.
+- The planned refactor will favor clear boundaries over compatibility shims where old concepts were ambiguous.
+- Future phase updates should include changed files, validation commands, and remaining risks.
+
+Validation:
+
+- Document files were created under `docs/architecture/`.
+
+### 2026-05-21: Phase 0 Completed
+
+Scope:
+
+- Added the architecture refactor plan.
+- Added this progress log.
+- Defined the phase sequence for naming, context, memory, state, prompt, evaluation, and portfolio polish.
+- No runtime code changes.
+- No package rename yet.
+
+Changed files:
+
+- `.gitignore`
+- `docs/architecture/lumen-refactor-plan.md`
+- `docs/architecture/lumen-refactor-progress.md`
+
+Validation:
+
+- Confirmed both documents exist under `docs/architecture/`.
+- Updated `.gitignore` so project docs are trackable.
+
+Risks / follow-ups:
+
+- Phase 1 will touch many files. It should be done as a dedicated rename stage with full test validation.
+- Avoid adding compatibility shims unless there is a clear pre-release migration reason.
+
+### 2026-05-21: Phase 1 Completed
+
+Scope:
+
+- Switched the Python package, CLI entry point, module entry point, runtime class names, tests, scripts, benchmark text, docs, environment variable prefix, and runtime artifact path to Lumen terminology.
+- Changed local runtime artifacts from `.pico/` to `.lumen/`.
+- Updated README examples and provider configuration names to `LUMEN_*`.
+- Renamed screenshot assets referenced by README.
+- Included `uv.lock` in version control scope for repeatable `uv` installs.
+- Kept this stage focused on identity and runtime path cleanup, without starting the context architecture refactor.
+
+Changed files:
+
+- `.env.example`
+- `.gitignore`
+- `README.md`
+- `assets/screenshots/*`
+- `benchmarks/coding_tasks.json`
+- `docs/architecture/*`
+- `docs/review-pack/README.md`
+- `lumen/*`
+- `pyproject.toml`
+- `scripts/*`
+- `tests/*`
+- `uv.lock`
+
+Validation:
+
+- `uv sync` completed successfully.
+- `uv run lumen --help` completed successfully.
+- `uv run python -m lumen --help` completed successfully.
+- `uv run python -c "import lumen; print(lumen.__name__); print(hasattr(lumen, 'LumenAgent'))"` completed successfully.
+- `uv run python -m pytest tests/test_evaluator.py -q` -> `8 passed`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+- `uv run python -m pytest -q` -> `104 passed, 1 skipped, 6 warnings`.
+- Fresh benchmark artifact generation -> `12 passed`, `pass_rate: 1.0`.
+
+Risks / follow-ups:
+
+- Phase 2 should document the new runtime vocabulary before deeper context refactoring.
+- Existing local pre-Phase-1 run/session artifacts are not migrated; new runs use `.lumen/`.
+- The remaining warnings are existing `datetime.utcnow()` deprecation warnings in metrics code.
+
+## Update Template
+
+Use this template after each phase:
+
+```markdown
+### YYYY-MM-DD: Phase N Completed
+
+Scope:
+
+- ...
+
+Changed files:
+
+- ...
+
+Validation:
+
+- `command`
+- result
+
+Risks / follow-ups:
+
+- ...
+```

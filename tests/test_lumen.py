@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pico as mini_pkg
-from pico import (
+import lumen as lumen_pkg
+from lumen import (
     AnthropicCompatibleModelClient,
     FakeModelClient,
-    MiniAgent,
+    LumenAgent,
     OllamaModelClient,
     OpenAICompatibleModelClient,
     SessionStore,
@@ -25,9 +25,9 @@ def build_workspace(tmp_path):
 
 def build_agent(tmp_path, outputs, **kwargs):
     workspace = build_workspace(tmp_path)
-    store = SessionStore(tmp_path / ".pico" / "sessions")
+    store = SessionStore(tmp_path / ".lumen" / "sessions")
     approval_policy = kwargs.pop("approval_policy", "auto")
-    return MiniAgent(
+    return LumenAgent(
         model_client=FakeModelClient(outputs),
         workspace=workspace,
         session_store=store,
@@ -86,7 +86,7 @@ def test_agent_only_stores_reusable_epistemic_notes(tmp_path):
     assert not any(note["text"] == "Done." for note in notes)
     assert not any(note["text"] == "Done." for note in notes)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>It is red.</final>"]),
         workspace=agent.workspace,
         session_store=agent.session_store,
@@ -112,7 +112,7 @@ def test_file_summary_cache_is_invalidated_on_out_of_band_edit_and_path_spelling
     assert "sample.txt: alpha" in agent.memory.render_memory_text()
     file_path.write_text("beta\n", encoding="utf-8")
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient([]),
         workspace=agent.workspace,
         session_store=agent.session_store,
@@ -195,7 +195,7 @@ def test_agent_saves_and_resumes_session(tmp_path):
     agent = build_agent(tmp_path, ["<final>First pass.</final>"])
     assert agent.ask("Start a session") == "First pass."
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=agent.workspace,
         session_store=agent.session_store,
@@ -256,13 +256,13 @@ def test_invalid_risky_tool_does_not_prompt_for_approval(tmp_path):
 
 def test_list_files_hides_internal_agent_state(tmp_path):
     agent = build_agent(tmp_path, [])
-    (tmp_path / ".pico").mkdir(exist_ok=True)
+    (tmp_path / ".lumen").mkdir(exist_ok=True)
     (tmp_path / ".git").mkdir(exist_ok=True)
     (tmp_path / "hello.txt").write_text("hi\n", encoding="utf-8")
 
     result = agent.run_tool("list_files", {})
 
-    assert ".pico" not in result
+    assert ".lumen" not in result
     assert ".git" not in result
     assert "[F] hello.txt" in result
 
@@ -278,7 +278,7 @@ def test_repeated_identical_tool_call_is_rejected(tmp_path):
 
 
 def test_welcome_screen_keeps_box_shape_for_long_paths(tmp_path):
-    deep = tmp_path / "very" / "long" / "path" / "for" / "the" / "mini" / "agent" / "welcome" / "screen"
+    deep = tmp_path / "very" / "long" / "path" / "for" / "the" / "lumen" / "agent" / "welcome" / "screen"
     deep.mkdir(parents=True)
     agent = build_agent(deep, [])
 
@@ -291,7 +291,7 @@ def test_welcome_screen_keeps_box_shape_for_long_paths(tmp_path):
     assert "(  o o  )" in welcome
     assert "MINI-CODING-AGENT" not in welcome
     assert "MINI CODING AGENT" not in welcome
-    assert "pico" in welcome
+    assert "lumen" in welcome
     assert "local coding agent" in welcome
     assert "// READY" not in welcome
     assert "SLASH" not in welcome
@@ -376,7 +376,7 @@ def test_openai_compatible_client_posts_expected_responses_payload():
     assert captured["headers"]["Authorization"] == "Bearer sk-test"
     assert captured["headers"]["Content-type"] == "application/json"
     assert captured["headers"]["Accept"] == "application/json"
-    assert captured["headers"]["User-agent"] == "pico/0.1"
+    assert captured["headers"]["User-agent"] == "lumen/0.1"
     assert captured["body"] == {
         "model": "right.codes/codex-mini",
         "input": [
@@ -651,11 +651,11 @@ def test_build_agent_uses_openai_provider_and_model_override(tmp_path):
         clear=False,
     ):
         with patch(
-            "pico.cli.OllamaModelClient",
+            "lumen.cli.OllamaModelClient",
             side_effect=AssertionError("ollama client should not be used"),
-        ), patch("pico.cli.OpenAICompatibleModelClient") as mock_openai:
+        ), patch("lumen.cli.OpenAICompatibleModelClient") as mock_openai:
             fake_client = mock_openai.return_value
-            agent = mini_pkg.build_agent(args)
+            agent = lumen_pkg.build_agent(args)
 
     mock_openai.assert_called_once()
     assert mock_openai.call_args.kwargs["model"] == "override-model"
@@ -665,19 +665,19 @@ def test_build_agent_uses_openai_provider_and_model_override(tmp_path):
 
 
 def test_build_arg_parser_defaults_provider_to_openai(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path)])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path)])
 
     assert args.provider == "openai"
 
 
 def test_build_arg_parser_accepts_anthropic_provider(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "anthropic"])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "anthropic"])
 
     assert args.provider == "anthropic"
 
 
 def test_build_arg_parser_accepts_deepseek_provider(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
 
     assert args.provider == "deepseek"
 
@@ -712,14 +712,14 @@ def test_build_agent_uses_anthropic_provider_and_openai_key_fallback(tmp_path):
         clear=True,
     ):
         with patch(
-            "pico.cli.OllamaModelClient",
+            "lumen.cli.OllamaModelClient",
             side_effect=AssertionError("ollama client should not be used"),
         ), patch(
-            "pico.cli.OpenAICompatibleModelClient",
+            "lumen.cli.OpenAICompatibleModelClient",
             side_effect=AssertionError("openai client should not be used"),
-        ), patch("pico.cli.AnthropicCompatibleModelClient") as mock_anthropic:
+        ), patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
             fake_client = mock_anthropic.return_value
-            agent = mini_pkg.build_agent(args)
+            agent = lumen_pkg.build_agent(args)
 
     mock_anthropic.assert_called_once()
     assert mock_anthropic.call_args.kwargs["model"] == "claude-sonnet-4-5-20250929"
@@ -729,7 +729,7 @@ def test_build_agent_uses_anthropic_provider_and_openai_key_fallback(tmp_path):
 
 
 def test_build_agent_uses_anthropic_default_model_when_env_is_missing(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "anthropic"])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "anthropic"])
 
     with patch.dict(
         os.environ,
@@ -737,8 +737,8 @@ def test_build_agent_uses_anthropic_default_model_when_env_is_missing(tmp_path):
         clear=False,
     ):
         os.environ.pop("ANTHROPIC_MODEL", None)
-        with patch("pico.cli.AnthropicCompatibleModelClient") as mock_anthropic:
-            mini_pkg.build_agent(args)
+        with patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
+            lumen_pkg.build_agent(args)
 
     assert mock_anthropic.call_args.kwargs["model"] == "claude-sonnet-4-6"
 
@@ -747,9 +747,9 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
     (tmp_path / ".env").write_text(
         "\n".join(
             [
-                "PICO_DEEPSEEK_API_BASE=https://api.deepseek.com/anthropic",
-                "PICO_DEEPSEEK_API_KEY=sk-project-deepseek",
-                "PICO_DEEPSEEK_MODEL=deepseek-v4-pro",
+                "LUMEN_DEEPSEEK_API_BASE=https://api.deepseek.com/anthropic",
+                "LUMEN_DEEPSEEK_API_KEY=sk-project-deepseek",
+                "LUMEN_DEEPSEEK_MODEL=deepseek-v4-pro",
             ]
         )
         + "\n",
@@ -788,14 +788,14 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
         clear=True,
     ):
         with patch(
-            "pico.cli.OllamaModelClient",
+            "lumen.cli.OllamaModelClient",
             side_effect=AssertionError("ollama client should not be used"),
         ), patch(
-            "pico.cli.OpenAICompatibleModelClient",
+            "lumen.cli.OpenAICompatibleModelClient",
             side_effect=AssertionError("openai client should not be used"),
-        ), patch("pico.cli.AnthropicCompatibleModelClient") as mock_anthropic:
+        ), patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
             fake_client = mock_anthropic.return_value
-            agent = mini_pkg.build_agent(args)
+            agent = lumen_pkg.build_agent(args)
 
     mock_anthropic.assert_called_once()
     assert mock_anthropic.call_args.kwargs["model"] == "deepseek-v4-pro"
@@ -805,18 +805,18 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
 
 
 def test_build_agent_uses_deepseek_default_model_when_env_is_missing(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
 
     with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-deepseek"}, clear=True):
-        with patch("pico.cli.AnthropicCompatibleModelClient") as mock_anthropic:
-            mini_pkg.build_agent(args)
+        with patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
+            lumen_pkg.build_agent(args)
 
     assert mock_anthropic.call_args.kwargs["model"] == "deepseek-v4-pro"
     assert mock_anthropic.call_args.kwargs["base_url"] == "https://api.deepseek.com/anthropic"
 
 
 def test_build_agent_uses_openai_provider_by_default(tmp_path):
-    args = mini_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path)])
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path)])
 
     with patch.dict(
         os.environ,
@@ -827,11 +827,11 @@ def test_build_agent_uses_openai_provider_by_default(tmp_path):
         clear=False,
     ):
         with patch(
-            "pico.cli.OllamaModelClient",
+            "lumen.cli.OllamaModelClient",
             side_effect=AssertionError("ollama client should not be used"),
-        ), patch("pico.cli.OpenAICompatibleModelClient") as mock_openai:
+        ), patch("lumen.cli.OpenAICompatibleModelClient") as mock_openai:
             fake_client = mock_openai.return_value
-            agent = mini_pkg.build_agent(args)
+            agent = lumen_pkg.build_agent(args)
 
     mock_openai.assert_called_once()
     assert mock_openai.call_args.kwargs["model"] == "gpt-5.4"
@@ -852,7 +852,7 @@ def test_successful_run_persists_run_artifacts_and_stop_reason(tmp_path):
 
     assert agent.ask("Do the thing") == "Finished."
 
-    runs_root = tmp_path / ".pico" / "runs"
+    runs_root = tmp_path / ".lumen" / "runs"
     run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
     assert len(run_dirs) == 1
 
@@ -892,7 +892,7 @@ def test_trace_and_report_redact_secret_env_values(tmp_path):
 
         assert agent.ask("Mask the secret") == "Masked."
 
-    runs_root = tmp_path / ".pico" / "runs"
+    runs_root = tmp_path / ".lumen" / "runs"
     run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
     assert len(run_dirs) == 1
 
@@ -1051,7 +1051,7 @@ def test_resume_prompt_uses_checkpoint_state_not_just_history(tmp_path):
     }
     agent.session_store.save(agent.session)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1097,7 +1097,7 @@ def test_resume_invalidates_stale_file_summaries_and_marks_partial_stale(tmp_pat
     agent.session_store.save(agent.session)
     file_path.write_text("beta\n", encoding="utf-8")
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1153,7 +1153,7 @@ def test_resume_marks_workspace_mismatch_when_checkpoint_runtime_identity_is_sta
     }
     agent.session_store.save(agent.session)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1215,7 +1215,7 @@ def test_resume_marks_schema_mismatch_when_checkpoint_version_is_incompatible(tm
     }
     agent.session_store.save(agent.session)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1232,7 +1232,7 @@ def test_resume_marks_no_checkpoint_when_session_has_no_checkpoint_state(tmp_pat
     agent.session.pop("checkpoints", None)
     agent.session_store.save(agent.session)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1288,8 +1288,8 @@ def test_freshness_mismatch_creates_checkpoint_before_model_completion(tmp_path)
 
 def test_runtime_identity_persists_key_execution_metadata(tmp_path):
     workspace = build_workspace(tmp_path)
-    store = SessionStore(tmp_path / ".pico" / "sessions")
-    agent = MiniAgent(
+    store = SessionStore(tmp_path / ".lumen" / "sessions")
+    agent = LumenAgent(
         model_client=FakeModelClient(["<final>Done.</final>"]),
         workspace=workspace,
         session_store=store,
@@ -1348,7 +1348,7 @@ def test_resume_records_runtime_identity_mismatch_fields_in_metadata_and_trace(t
     }
     agent.session_store.save(agent.session)
 
-    resumed = MiniAgent.from_session(
+    resumed = LumenAgent.from_session(
         model_client=FakeModelClient(["<final>Resumed.</final>"]),
         workspace=build_workspace(tmp_path),
         session_store=agent.session_store,
@@ -1415,7 +1415,7 @@ def test_explicit_memory_promotion_persists_durable_memory_topics(tmp_path):
         tmp_path,
         [
             "<final>Project convention: Use constrained tools instead of guessing.\n"
-            "Project convention: Preserve local agent state under .pico/.\n"
+            "Project convention: Preserve local agent state under .lumen/.\n"
             "Decision: Keep durable memory topic-based and lightweight.</final>",
         ],
     )
@@ -1427,9 +1427,9 @@ def test_explicit_memory_promotion_persists_durable_memory_topics(tmp_path):
 
     assert "Project convention:" in answer
 
-    index_path = tmp_path / ".pico" / "memory" / "MEMORY.md"
-    conventions_path = tmp_path / ".pico" / "memory" / "topics" / "project-conventions.md"
-    decisions_path = tmp_path / ".pico" / "memory" / "topics" / "key-decisions.md"
+    index_path = tmp_path / ".lumen" / "memory" / "MEMORY.md"
+    conventions_path = tmp_path / ".lumen" / "memory" / "topics" / "project-conventions.md"
+    decisions_path = tmp_path / ".lumen" / "memory" / "topics" / "key-decisions.md"
     report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
 
     assert index_path.exists()
@@ -1440,7 +1440,7 @@ def test_explicit_memory_promotion_persists_durable_memory_topics(tmp_path):
     assert "Keep durable memory topic-based and lightweight." in decisions_path.read_text(encoding="utf-8")
     assert report["durable_promotions"] == [
         "project-conventions: Use constrained tools instead of guessing.",
-        "project-conventions: Preserve local agent state under .pico/.",
+        "project-conventions: Preserve local agent state under .lumen/.",
         "key-decisions: Keep durable memory topic-based and lightweight.",
     ]
 
@@ -1458,8 +1458,8 @@ def test_explicit_memory_promotion_supports_chinese_intent_and_labels(tmp_path):
 
     assert "项目约定：" in answer
 
-    conventions_path = tmp_path / ".pico" / "memory" / "topics" / "project-conventions.md"
-    decisions_path = tmp_path / ".pico" / "memory" / "topics" / "key-decisions.md"
+    conventions_path = tmp_path / ".lumen" / "memory" / "topics" / "project-conventions.md"
+    decisions_path = tmp_path / ".lumen" / "memory" / "topics" / "key-decisions.md"
 
     assert "优先使用受约束工具，不要靠猜。" in conventions_path.read_text(encoding="utf-8")
     assert "持久记忆保持轻量、按 topic 管理。" in decisions_path.read_text(encoding="utf-8")
@@ -1479,8 +1479,8 @@ def test_explicit_memory_promotion_rejects_secret_shaped_and_transient_lines(tmp
     agent.ask("Capture these stable facts into durable memory.")
 
     report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
-    conventions_path = tmp_path / ".pico" / "memory" / "topics" / "project-conventions.md"
-    dependency_path = tmp_path / ".pico" / "memory" / "topics" / "dependency-facts.md"
+    conventions_path = tmp_path / ".lumen" / "memory" / "topics" / "project-conventions.md"
+    dependency_path = tmp_path / ".lumen" / "memory" / "topics" / "dependency-facts.md"
 
     assert report["durable_promotions"] == [
         "project-conventions: Use constrained tools instead of guessing.",
@@ -1506,7 +1506,7 @@ def test_explicit_memory_promotion_supersedes_matching_durable_fact(tmp_path):
     assert agent.ask("Capture this stable dependency fact into durable memory.") == "Dependency: Python runtime is 3.11."
     assert agent.ask("Save the updated dependency fact into durable memory.") == "Dependency: Python runtime is 3.12."
 
-    dependency_path = tmp_path / ".pico" / "memory" / "topics" / "dependency-facts.md"
+    dependency_path = tmp_path / ".lumen" / "memory" / "topics" / "dependency-facts.md"
     report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
     text = dependency_path.read_text(encoding="utf-8")
 
@@ -1529,7 +1529,7 @@ def test_explicit_memory_promotion_dedupes_duplicate_durable_note(tmp_path):
     agent.ask("Capture the stable fact into durable memory.")
     agent.ask("Capture the stable fact into durable memory again.")
 
-    conventions_path = tmp_path / ".pico" / "memory" / "topics" / "project-conventions.md"
+    conventions_path = tmp_path / ".lumen" / "memory" / "topics" / "project-conventions.md"
     text = conventions_path.read_text(encoding="utf-8")
 
     assert text.count("Use constrained tools instead of guessing.") == 1
@@ -1547,8 +1547,8 @@ def test_agent_records_model_cache_metadata_in_last_prompt_metadata(tmp_path):
             return super().complete(prompt, max_new_tokens, **kwargs)
 
     workspace = build_workspace(tmp_path)
-    store = SessionStore(tmp_path / ".pico" / "sessions")
-    agent = MiniAgent(
+    store = SessionStore(tmp_path / ".lumen" / "sessions")
+    agent = LumenAgent(
         model_client=CacheAwareFakeModelClient(["<final>Done.</final>"]),
         workspace=workspace,
         session_store=store,
@@ -1589,11 +1589,11 @@ def test_recent_transcript_entries_stay_richer_than_older_ones(tmp_path):
 def test_public_api_exports_resolve_through_package_path():
     assert callable(build_welcome)
     assert FakeModelClient is not None
-    assert MiniAgent is not None
+    assert LumenAgent is not None
     assert OllamaModelClient is not None
     assert SessionStore is not None
     assert WorkspaceContext is not None
-    assert Path(mini_pkg.__file__).as_posix().endswith("/pico/__init__.py")
+    assert Path(lumen_pkg.__file__).as_posix().endswith("/lumen/__init__.py")
 
 
 def test_reviewer_skeleton_docs_exist():
@@ -1615,14 +1615,14 @@ def test_reviewer_skeleton_docs_exist():
 
 
 def test_package_import_surface_includes_cli_entrypoints():
-    assert callable(mini_pkg.main)
-    assert callable(mini_pkg.build_agent)
-    assert callable(mini_pkg.build_arg_parser)
+    assert callable(lumen_pkg.main)
+    assert callable(lumen_pkg.build_agent)
+    assert callable(lumen_pkg.build_arg_parser)
 
 
 def test_module_execution_help_works():
     result = subprocess.run(
-        [sys.executable, "-m", "pico", "--help"],
+        [sys.executable, "-m", "lumen", "--help"],
         capture_output=True,
         text=True,
     )
