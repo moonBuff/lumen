@@ -129,7 +129,7 @@ class Lumen:
             "id": datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6],
             "created_at": now(),
             "workspace_root": workspace.repo_root,
-            "history": [],
+            "transcript": [],
             "memory": memorylib.default_memory_state(),
         }
         self._ensure_session_shape()
@@ -168,7 +168,8 @@ class Lumen:
         )
 
     def _ensure_session_shape(self):
-        self.session.setdefault("history", [])
+        self.session.setdefault("transcript", [])
+        self.session.pop("history", None)
         self.session.setdefault("memory", memorylib.default_memory_state())
         checkpoints = self.session.setdefault("checkpoints", {})
         if not isinstance(checkpoints, dict):
@@ -438,15 +439,15 @@ class Lumen:
     def memory_text(self):
         return self.memory.render_memory_text()
 
-    def history_text(self):
-        history = self.session["history"]
-        if not history:
+    def transcript_text(self):
+        transcript = self.session["transcript"]
+        if not transcript:
             return "- empty"
 
         lines = []
         seen_reads = set()
-        recent_start = max(0, len(history) - 6)
-        for index, item in enumerate(history):
+        recent_start = max(0, len(transcript) - 6)
+        for index, item in enumerate(transcript):
             recent = index >= recent_start
             if item["role"] == "tool" and item["name"] == "read_file" and not recent:
                 path = str(item["args"].get("path", ""))
@@ -472,7 +473,7 @@ class Lumen:
         return prompt
 
     def record(self, item):
-        self.session["history"].append(item)
+        self.session["transcript"].append(item)
         self.session_path = self.session_store.save(self.session)
 
     @staticmethod
@@ -572,7 +573,7 @@ class Lumen:
                 },
                 "workspace_chars": len(self.workspace.text()),
                 "memory_chars": len(self.memory_text()),
-                "history_chars": len(self.history_text()),
+                "transcript_chars": len(self.transcript_text()),
                 "request_chars": len(user_message),
                 "tool_count": len(self.tools),
                 "workspace_docs": len(self.workspace.project_docs),
@@ -681,7 +682,7 @@ class Lumen:
 
         为什么存在：
         并不是每个工具结果都值得长期带进下一轮 prompt。完整结果已经进了
-        `history`，这里只挑少量“下一轮大概率还会用到”的事实做提纯，
+        `transcript`，这里只挑少量“下一轮大概率还会用到”的事实做提纯，
         例如最近读写过哪些文件、某个文件读出来的短摘要。
 
         输入 / 输出：
@@ -835,7 +836,7 @@ class Lumen:
         # 1. 感知：重新组 prompt，把当前状态整理给模型看
         # 2. 决策：让模型返回一个工具调用，或一个最终答案
         # 3. 行动：如果是工具调用，就执行工具
-        # 4. 记录：把结果写回 history / task_state / trace / memory
+        # 4. 记录：把结果写回 transcript / task_state / trace / memory
         # 然后进入下一轮，直到停机条件满足
         while tool_steps < self.max_steps and attempts < max_attempts:
             attempts += 1
@@ -1166,7 +1167,7 @@ class Lumen:
     def repeated_tool_call(self, name, args):
         # agent 很常见的一种坏循环，是在没有新信息的情况下反复发起同一调用。
         # 这里提前挡掉最简单的这种循环。
-        tool_events = [item for item in self.session["history"] if item["role"] == "tool"]
+        tool_events = [item for item in self.session["transcript"] if item["role"] == "tool"]
         if len(tool_events) < 2:
             return False
         recent = tool_events[-2:]
@@ -1366,7 +1367,7 @@ class Lumen:
         return text[start:end]
 
     def reset(self):
-        self.session["history"] = []
+        self.session["transcript"] = []
         self.session["memory"].clear()
         self.session["memory"].update(memorylib.default_memory_state())
         self.memory = memorylib.LayeredMemory(self.session["memory"], workspace_root=self.root)

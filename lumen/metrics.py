@@ -180,7 +180,7 @@ def measure_feature_ablation_metrics(agent, user_message):
         results[name] = {
             "prompt_chars": int(metadata.get("prompt_chars", 0)),
             "memory_chars": int(metadata.get("sections", {}).get("memory", {}).get("rendered_chars", 0)),
-            "history_chars": int(metadata.get("sections", {}).get("history", {}).get("rendered_chars", 0)),
+            "transcript_chars": int(metadata.get("sections", {}).get("transcript", {}).get("rendered_chars", 0)),
             "relevant_selected_count": int(metadata.get("relevant_memory", {}).get("selected_count", 0)),
             "budget_reduction_count": len(metadata.get("budget_reductions", [])),
             "current_request_preserved": prompt.endswith(f"Current user request:\n{user_message}"),
@@ -209,7 +209,7 @@ def build_stress_agent_metrics():
             agent.record(
                 {
                     "role": "user" if index % 2 == 0 else "assistant",
-                    "content": f"stress-history-{index}-" + ("B" * 220),
+                    "content": f"stress-transcript-{index}-" + ("B" * 220),
                     "created_at": f"2026-04-08T11:{index:02d}:00+00:00",
                 }
             )
@@ -336,10 +336,10 @@ MEMORY_EXPERIMENT_TASKS = [
     {"id": "edit_token", "category": "edit_dependency", "filename": "sample.txt", "fact": "second token is placeholder"},
     {"id": "edit_field", "category": "edit_dependency", "filename": "config.txt", "fact": "fixed field name is benchmark_schema"},
     {"id": "edit_line", "category": "edit_dependency", "filename": "notes.txt", "fact": "locked marker is on line three"},
-    {"id": "history_file", "category": "history_reference", "filename": "history.txt", "fact": "deploy fact came from facts.txt"},
-    {"id": "history_line", "category": "history_reference", "filename": "history.txt", "fact": "benchmark note came from line two"},
-    {"id": "history_token", "category": "history_reference", "filename": "history.txt", "fact": "placeholder token was beta"},
-    {"id": "history_tool", "category": "history_reference", "filename": "history.txt", "fact": "inspection tool was read_file"},
+    {"id": "transcript_file", "category": "transcript_reference", "filename": "transcript.txt", "fact": "deploy fact came from facts.txt"},
+    {"id": "transcript_line", "category": "transcript_reference", "filename": "transcript.txt", "fact": "benchmark note came from line two"},
+    {"id": "transcript_token", "category": "transcript_reference", "filename": "transcript.txt", "fact": "placeholder token was beta"},
+    {"id": "transcript_tool", "category": "transcript_reference", "filename": "transcript.txt", "fact": "inspection tool was read_file"},
 ]
 
 
@@ -437,12 +437,12 @@ def run_large_scale_memory_experiment(repetitions=5):
 
 def run_context_stress_matrix(repetitions=5):
     repetitions = int(repetitions)
-    history_levels = [("short", 4), ("medium", 12), ("long", 24)]
+    transcript_levels = [("short", 4), ("medium", 12), ("long", 24)]
     note_levels = [("low", 2), ("high", 10)]
     request_levels = [("short", "recall"), ("long", "recall the relevant benchmark fact without dropping the latest request details")]
     configs = []
 
-    for history_label, history_count in history_levels:
+    for transcript_label, transcript_count in transcript_levels:
         for note_label, note_count in note_levels:
             for request_label, request_text in request_levels:
                 per_run = []
@@ -464,11 +464,11 @@ def run_context_stress_matrix(repetitions=5):
                                 tags=("recall",),
                                 created_at=f"2026-04-08T10:{index:02d}:00+00:00",
                             )
-                        for index in range(history_count):
+                        for index in range(transcript_count):
                             agent.record(
                                 {
                                     "role": "user" if index % 2 == 0 else "assistant",
-                                    "content": f"matrix-history-{index}-" + ("B" * 220),
+                                    "content": f"matrix-transcript-{index}-" + ("B" * 220),
                                     "created_at": f"2026-04-08T11:{index:02d}:00+00:00",
                                 }
                             )
@@ -486,8 +486,8 @@ def run_context_stress_matrix(repetitions=5):
                         )
                 configs.append(
                     {
-                        "id": f"{history_label}-{note_label}-{request_label}",
-                        "history_level": history_label,
+                        "id": f"{transcript_label}-{note_label}-{request_label}",
+                        "transcript_level": transcript_label,
                         "note_level": note_label,
                         "request_level": request_label,
                         "avg_prompt_compression_ratio": _safe_mean(item["compression_ratio"] for item in per_run),
@@ -821,16 +821,16 @@ def _inject_memory_noise(agent, rounds=8):
         )
 
 
-def _truncate_read_history(agent):
+def _truncate_read_transcript(agent):
     updated = []
-    for item in agent.session["history"]:
+    for item in agent.session["transcript"]:
         if item.get("role") == "tool" and item.get("name") == "read_file":
             replacement = dict(item)
             replacement["content"] = f"# {item.get('args', {}).get('path', 'file')}\n(truncated from transcript)"
             updated.append(replacement)
         else:
             updated.append(item)
-    agent.session["history"] = updated
+    agent.session["transcript"] = updated
     agent.session_path = agent.session_store.save(agent.session)
 
 
@@ -867,7 +867,7 @@ def run_real_memory_experiment(provider="gpt", repetitions=1):
                     elif variant == "memory_irrelevant":
                         _set_irrelevant_memory_for_task(agent)
                     _inject_memory_noise(agent)
-                    _truncate_read_history(agent)
+                    _truncate_read_transcript(agent)
                     if task["category"] == "fact_lookup":
                         prompt = (
                             f"What exact line did you previously read from {task['filename']}? "
@@ -915,17 +915,17 @@ def run_real_memory_experiment(provider="gpt", repetitions=1):
 def run_real_context_experiment(provider="gpt", repetitions=1):
     repetitions = int(repetitions)
     provider = str(provider)
-    history_levels = [("short", 4), ("medium", 12), ("long", 24)]
+    transcript_levels = [("short", 4), ("medium", 12), ("long", 24)]
     note_levels = [("low", 2), ("high", 10)]
     request_levels = [
         ("short", "Reply with the target token only."),
         ("long", "Reply with the target token only. Do not restate the prompt, and do not output any extra words."),
     ]
     configs = []
-    for history_label, history_count in history_levels:
+    for transcript_label, transcript_count in transcript_levels:
         for note_label, note_count in note_levels:
             for request_label, request_text in request_levels:
-                token = f"TOKEN-{history_label}-{note_label}-{request_label}"
+                token = f"TOKEN-{transcript_label}-{note_label}-{request_label}"
                 per_run = []
                 for _ in range(repetitions):
                     for variant_name, updates in (("full", {}), ("no_context_reduction", {"context_reduction": False})):
@@ -936,11 +936,11 @@ def run_real_context_experiment(provider="gpt", repetitions=1):
                             for index in range(note_count):
                                 note_text = f"target token is {token}" if index == 0 else f"decoy token is DECOY-{index}"
                                 agent.memory.append_note(note_text, tags=("token",), created_at=f"2026-04-09T10:{index:02d}:00+00:00")
-                            for index in range(history_count):
+                            for index in range(transcript_count):
                                 agent.record(
                                     {
                                         "role": "user" if index % 2 == 0 else "assistant",
-                                        "content": f"context-history-{index}-" + ("B" * 220),
+                                        "content": f"context-transcript-{index}-" + ("B" * 220),
                                         "created_at": f"2026-04-09T11:{index:02d}:00+00:00",
                                     }
                                 )
@@ -959,8 +959,8 @@ def run_real_context_experiment(provider="gpt", repetitions=1):
                 avg_raw = _safe_mean(row["prompt_chars"] for row in raw_rows)
                 configs.append(
                     {
-                        "id": f"{history_label}-{note_label}-{request_label}",
-                        "history_level": history_label,
+                        "id": f"{transcript_label}-{note_label}-{request_label}",
+                        "transcript_level": transcript_label,
                         "note_level": note_label,
                         "request_level": request_label,
                         "avg_full_prompt_chars": avg_full,

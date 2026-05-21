@@ -17,18 +17,18 @@ DEFAULT_SECTION_BUDGETS = {
     "checkpoint_context": 800,
     "memory": 1600,
     "relevant_memory": 1200,
-    "history": 5200,
+    "transcript": 5200,
 }
 DEFAULT_SECTION_FLOORS = {
     "prefix": 1200,
     "checkpoint_context": 200,
     "memory": 400,
     "relevant_memory": 300,
-    "history": 1500,
+    "transcript": 1500,
 }
 # 当 prompt 超预算时，会优先压缩这些 section。
-DEFAULT_REDUCTION_ORDER = ("relevant_memory", "history", "memory", "checkpoint_context", "prefix")
-SECTION_ORDER = ("prefix", "checkpoint_context", "memory", "relevant_memory", "history", "current_request")
+DEFAULT_REDUCTION_ORDER = ("relevant_memory", "transcript", "memory", "checkpoint_context", "prefix")
+SECTION_ORDER = ("prefix", "checkpoint_context", "memory", "relevant_memory", "transcript", "current_request")
 CURRENT_REQUEST_SECTION = "current_request"
 CHECKPOINT_CONTEXT_SECTION = "checkpoint_context"
 RELEVANT_MEMORY_LIMIT = 3
@@ -106,7 +106,7 @@ class ContextManager:
             "prefix": self._stable_context_text(),
             CHECKPOINT_CONTEXT_SECTION: self._checkpoint_context_text(),
             "memory": "Memory:\n- disabled" if not memory_enabled else str(self.agent.memory_text()),
-            "history": "",
+            "transcript": "",
             CURRENT_REQUEST_SECTION: f"Current user request:\n{user_message}",
         }
         selected_notes = []
@@ -134,7 +134,7 @@ class ContextManager:
 
         # 如果 prompt 超预算，就按固定顺序不断压缩。
         # 这里的顺序体现了平台偏好：
-        # 先牺牲 relevant_memory，再牺牲 history，然后才动 memory 和 prefix。
+        # 先牺牲 relevant_memory，再牺牲 transcript，然后才动 memory 和 prefix。
         # 最新用户请求永远不裁剪，因为那是本轮最重要的输入。
         while len(prompt) > self.total_budget:
             overflow = len(prompt) - self.total_budget
@@ -196,8 +196,8 @@ class ContextManager:
         else:
             relevant_lines.append("- none")
         relevant_raw = "\n".join(relevant_lines)
-        history = list(getattr(self.agent, "session", {}).get("history", []))
-        history_raw = self._raw_history_text(history)
+        transcript = list(getattr(self.agent, "session", {}).get("transcript", []))
+        transcript_raw = self._raw_transcript_text(transcript)
         return {
             "prefix": SectionRender(
                 raw=section_texts["prefix"],
@@ -224,7 +224,7 @@ class ContextManager:
                     "note_budget": 0,
                 },
             ),
-            "history": SectionRender(raw=history_raw, budget=len(history_raw), rendered=history_raw, details={"rendered_entries": []}),
+            "transcript": SectionRender(raw=transcript_raw, budget=len(transcript_raw), rendered=transcript_raw, details={"rendered_entries": []}),
             CURRENT_REQUEST_SECTION: SectionRender(
                 raw=section_texts[CURRENT_REQUEST_SECTION],
                 budget=0,
@@ -260,8 +260,8 @@ class ContextManager:
                 rendered[section] = SectionRender(raw=raw, budget=0, rendered=raw, details={})
             elif section == "relevant_memory":
                 rendered[section] = self._render_relevant_memory(selected_notes or [], int(budget or 0))
-            elif section == "history":
-                rendered[section] = self._render_history_section(int(budget or 0))
+            elif section == "transcript":
+                rendered[section] = self._render_transcript_section(int(budget or 0))
             else:
                 raw = section_texts[section]
                 rendered_text = _tail_clip(raw, int(budget)) if budget is not None else raw
@@ -338,10 +338,10 @@ class ContextManager:
         usable = max(0, budget - overhead)
         return max(1, usable // note_count)
 
-    def _render_history_section(self, budget):
-        history = list(getattr(self.agent, "session", {}).get("history", []))
-        raw = self._raw_history_text(history)
-        if not history:
+    def _render_transcript_section(self, budget):
+        transcript = list(getattr(self.agent, "session", {}).get("transcript", []))
+        raw = self._raw_transcript_text(transcript)
+        if not transcript:
             rendered = "Transcript:\n- empty"
             return SectionRender(
                 raw=raw,
@@ -358,10 +358,10 @@ class ContextManager:
 
         # 优先保留最近的历史，因为下一步决策通常最依赖刚刚发生的工具结果。
         recent_window = 6
-        recent_start = max(0, len(history) - recent_window)
-        history_entries, history_details = self._compressed_history_entries(history, recent_start)
+        recent_start = max(0, len(transcript) - recent_window)
+        transcript_entries, transcript_details = self._compressed_transcript_entries(transcript, recent_start)
         rendered_entries = []
-        for entry in reversed(history_entries):
+        for entry in reversed(transcript_entries):
             recent = bool(entry.get("recent", False))
             candidate_lines = list(entry.get("lines", []))
             candidate_entries = candidate_lines + rendered_entries
@@ -398,11 +398,11 @@ class ContextManager:
                 "recent_window": recent_window,
                 "recent_start": recent_start,
                 "rendered_entries": rendered_entries,
-                **history_details,
+                **transcript_details,
             },
         )
 
-    def _compressed_history_entries(self, history, recent_start):
+    def _compressed_transcript_entries(self, transcript, recent_start):
         entries = []
         seen_older_reads = set()
         details = {
@@ -412,14 +412,14 @@ class ContextManager:
             "summarized_tool_count": 0,
         }
 
-        for index, item in enumerate(history):
+        for index, item in enumerate(transcript):
             recent = index >= recent_start
             if recent:
                 line_limit = 900
                 entries.append(
                     {
                         "recent": True,
-                        "lines": self._render_history_item(item, line_limit),
+                        "lines": self._render_transcript_item(item, line_limit),
                     }
                 )
                 continue
@@ -444,7 +444,7 @@ class ContextManager:
                 details["summarized_tool_count"] += 1
                 continue
 
-            entries.append({"recent": False, "lines": self._render_history_item(item, 60)})
+            entries.append({"recent": False, "lines": self._render_transcript_item(item, 60)})
 
         return entries, details
 
@@ -464,13 +464,13 @@ class ContextManager:
             lines = [line.strip() for line in str(item.get("content", "")).splitlines() if line.strip()]
             summary = " | ".join(lines[:3]) if lines else "(empty)"
             return f"{command} -> {summary}"
-        return self._render_history_item(item, 60)[0]
+        return self._render_transcript_item(item, 60)[0]
 
-    def _raw_history_text(self, history):
-        if not history:
+    def _raw_transcript_text(self, transcript):
+        if not transcript:
             return "Transcript:\n- empty"
         lines = []
-        for item in history:
+        for item in transcript:
             if item["role"] == "tool":
                 lines.append(f"[tool:{item['name']}] {json.dumps(item['args'], sort_keys=True)}")
                 lines.append(str(item["content"]))
@@ -478,7 +478,7 @@ class ContextManager:
                 lines.append(f"[{item['role']}] {item['content']}")
         return "\n".join(["Transcript:", *lines])
 
-    def _render_history_item(self, item, line_limit):
+    def _render_transcript_item(self, item, line_limit):
         if item["role"] == "tool":
             prefix = f"[tool:{item['name']}] {json.dumps(item['args'], sort_keys=True)}"
             content = _tail_clip(item["content"], max(20, line_limit))
@@ -534,13 +534,13 @@ class ContextManager:
                 "rendered_notes": list(rendered["relevant_memory"].details.get("rendered_notes", [])),
                 "rendered_count": int(rendered["relevant_memory"].details.get("rendered_count", 0)),
             },
-            "history": {
-                "raw_chars": rendered["history"].raw_chars,
-                "rendered_chars": rendered["history"].rendered_chars,
-                "older_entries_count": int(rendered["history"].details.get("older_entries_count", 0)),
-                "collapsed_duplicate_reads": int(rendered["history"].details.get("collapsed_duplicate_reads", 0)),
-                "reused_file_summary_count": int(rendered["history"].details.get("reused_file_summary_count", 0)),
-                "summarized_tool_count": int(rendered["history"].details.get("summarized_tool_count", 0)),
+            "transcript": {
+                "raw_chars": rendered["transcript"].raw_chars,
+                "rendered_chars": rendered["transcript"].rendered_chars,
+                "older_entries_count": int(rendered["transcript"].details.get("older_entries_count", 0)),
+                "collapsed_duplicate_reads": int(rendered["transcript"].details.get("collapsed_duplicate_reads", 0)),
+                "reused_file_summary_count": int(rendered["transcript"].details.get("reused_file_summary_count", 0)),
+                "summarized_tool_count": int(rendered["transcript"].details.get("summarized_tool_count", 0)),
             },
             "current_request": {
                 "text": user_message,

@@ -272,7 +272,7 @@ class OpenAICompatibleModelClient:
         if self.temperature is not None:
             payload["temperature"] = self.temperature
         # runtime 传入的是“稳定前缀”的签名，而不是整段 prompt 的签名。
-        # 这样缓存复用针对的是稳定段，不会因为动态 history 每轮变化而失效。
+        # 这样缓存复用针对的是稳定段，不会因为动态 transcript 每轮变化而失效。
         if self.supports_prompt_cache and prompt_cache_key:
             payload["prompt_cache_key"] = prompt_cache_key
         if self.supports_prompt_cache and prompt_cache_retention:

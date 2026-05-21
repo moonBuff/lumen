@@ -40,7 +40,7 @@ The runtime remains single-agent by design. Lumen does not need a graph schedule
 | `Session` | A recoverable multi-run conversation container. It owns the conversation transcript and session-level metadata. | `lumen.session.SessionStore`, files under `.lumen/sessions/`. |
 | `Run` | One user request from `ask()` start to final answer, error, or stop condition. | `lumen.run_store.RunStore`, files under `.lumen/runs/<run_id>/`. |
 | `TaskState` | Execution control state for one run: attempts, tool calls, stop reason, checkpoint id, and pending resume information. | `lumen.task_state.TaskState`. |
-| `Transcript` | User, assistant, and tool interaction history inside a session. It records conversation flow, not distilled knowledge. | Currently stored as session `history`; later phases should rename this concept in code. |
+| `Transcript` | User, assistant, and tool interaction history inside a session. It records conversation flow, not distilled knowledge. | Stored as session `transcript` and rendered by the context manager. |
 | `Memory` | Reusable knowledge distilled from prior activity or durable notes. Memory should summarize or reference useful facts instead of duplicating the transcript. | `lumen.memory.MemoryManager` and related memory records. |
 | `ModelContext` | A structured set of sections prepared for the model on a turn: instructions, tools, workspace, transcript slice, memory, task state hints, and checkpoint context. | Target abstraction for Phase 3. Current behavior is assembled through context and prompt helpers. |
 | `Prompt` | The final serialized text sent to the model. It is derived from `ModelContext`. | Current rendered model input produced before `ModelClient.complete()`. |
@@ -121,4 +121,4 @@ This keeps the project aligned with common agent architecture concepts without m
 
 ## Phase Notes
 
-Phase 2 documents the target vocabulary. Some current code may still use older internal names such as `history` or build prompt text directly in places. Later phases should refactor those names decisively instead of adding compatibility layers around ambiguous concepts.
+Phase 5 moved the session conversation record to `transcript`. Later phases may still clean up report and benchmark presentation terms, but runtime context now uses the target vocabulary for the conversation record.

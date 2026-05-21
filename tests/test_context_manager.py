@@ -38,7 +38,7 @@ def test_context_manager_assembles_sections_in_expected_order(tmp_path):
         "checkpoint_context",
         "memory",
         "relevant_memory",
-        "history",
+        "transcript",
         "current_request",
     ]
     assert metadata["model_context"]["section_order"] == metadata["section_order"]
@@ -66,7 +66,7 @@ def test_context_manager_builds_structured_model_context_before_rendering(tmp_pa
         "checkpoint_context",
         "memory",
         "relevant_memory",
-        "history",
+        "transcript",
         "current_request",
     ]
     assert model_context.sections["current_request"].rendered == "Current user request:\nExplain the workspace."
@@ -76,7 +76,7 @@ def test_context_manager_builds_structured_model_context_before_rendering(tmp_pa
     )
 
 
-def test_context_manager_reduces_relevant_memory_before_history_and_preserves_newer_context(tmp_path):
+def test_context_manager_reduces_relevant_memory_before_transcript_and_preserves_newer_context(tmp_path):
     agent = build_agent(tmp_path, [])
     agent.prefix = "PREFIX " + ("A" * 600)
     agent.memory.render_memory_text = lambda: "MEMORY " + ("B" * 600)
@@ -96,13 +96,13 @@ def test_context_manager_reduces_relevant_memory_before_history_and_preserves_ne
             "prefix": 120,
             "memory": 120,
             "relevant_memory": 120,
-            "history": 400,
+            "transcript": 400,
         },
     )
 
     prompt, metadata = manager.build("keep this request verbatim")
 
-    for section in ("prefix", "memory", "relevant_memory", "history"):
+    for section in ("prefix", "memory", "relevant_memory", "transcript"):
         assert metadata["sections"][section]["rendered_chars"] <= metadata["sections"][section]["budget_chars"]
 
     reduction_sections = [entry["section"] for entry in metadata["budget_reductions"]]
@@ -128,7 +128,7 @@ def test_context_manager_renders_top_three_episodic_notes_per_note_under_budget(
             "prefix": 60,
             "memory": 60,
             "relevant_memory": 80,
-            "history": 60,
+            "transcript": 60,
         },
     ).build("recall")
 
@@ -157,7 +157,7 @@ def test_context_manager_preserves_current_request_when_over_budget(tmp_path):
     agent.prefix = "PREFIX " + ("A" * 600)
     agent.memory.render_memory_text = lambda: "MEMORY " + ("B" * 600)
     agent.memory.retrieval_view = lambda query, limit=3: "Relevant memory:\n" + "\n".join(f"- {i} " + ("C" * 220) for i in range(5))
-    agent.history_text = lambda: "Transcript:\n" + "\n".join(f"[user] {i} " + ("D" * 220) for i in range(5))
+    agent.transcript_text = lambda: "Transcript:\n" + "\n".join(f"[user] {i} " + ("D" * 220) for i in range(5))
 
     request = "please preserve this request exactly"
     prompt, metadata = ContextManager(
@@ -167,7 +167,7 @@ def test_context_manager_preserves_current_request_when_over_budget(tmp_path):
             "prefix": 80,
             "memory": 80,
             "relevant_memory": 80,
-            "history": 80,
+            "transcript": 80,
         },
     ).build(request)
 
@@ -209,9 +209,9 @@ def test_context_manager_collapses_older_duplicate_reads_into_one_summary_line(t
 
     assert transcript.count("[tool:read_file]") == 0
     assert "sample.txt -> alpha | beta" in transcript
-    assert metadata["history"]["older_entries_count"] == 1
-    assert metadata["history"]["collapsed_duplicate_reads"] == 1
-    assert metadata["history"]["reused_file_summary_count"] == 1
+    assert metadata["transcript"]["older_entries_count"] == 1
+    assert metadata["transcript"]["collapsed_duplicate_reads"] == 1
+    assert metadata["transcript"]["reused_file_summary_count"] == 1
 
 
 def test_context_manager_summarizes_older_tool_output_into_one_line(tmp_path):
@@ -241,8 +241,8 @@ def test_context_manager_summarizes_older_tool_output_into_one_line(tmp_path):
 
     assert 'pytest -q -> FAIL test_one | FAIL test_two | FAIL test_three' in transcript
     assert "FAIL test_four" not in transcript
-    assert metadata["history"]["summarized_tool_count"] == 1
-    assert metadata["history"]["reused_file_summary_count"] == 0
+    assert metadata["transcript"]["summarized_tool_count"] == 1
+    assert metadata["transcript"]["reused_file_summary_count"] == 0
 
 
 def test_context_manager_relevant_memory_can_mix_durable_notes(tmp_path):

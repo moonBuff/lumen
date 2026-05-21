@@ -212,7 +212,7 @@ def test_delegate_child_is_read_only(tmp_path):
 
     assert result == "parent done"
     assert not target.exists()
-    tool_events = [item for item in agent.session["history"] if item["role"] == "tool"]
+    tool_events = [item for item in agent.session["transcript"] if item["role"] == "tool"]
     assert tool_events[0]["name"] == "delegate"
     assert "delegate_result" in tool_events[0]["content"]
 

@@ -13,8 +13,9 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Runtime concept documentation | Completed |
 | Structured model context | Completed |
 | Explicit context blocks | Completed |
+| Transcript/session cleanup | Completed |
 | Context architecture refactor | In progress |
-| Full test status | `105 passed, 1 skipped, 6 warnings` after Phase 4 |
+| Full test status | `106 passed, 1 skipped, 6 warnings` after Phase 5 |
 
 ## Phase Tracker
 
@@ -25,7 +26,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 2 | Runtime Concept Documentation | Completed | Runtime vocabulary, boundaries, and lightweight architecture rationale are documented. |
 | 3 | Structured ModelContext | Completed | Context sections are now structured before prompt rendering. |
 | 4 | Explicit Context Blocks | Completed | Stable prompt context is split into explicit blocks and checkpoint context is a separate section. |
-| 5 | Transcript, Memory, and Session Cleanup | Not started | Pending. |
+| 5 | Transcript, Memory, and Session Cleanup | Completed | Session conversation state now uses `transcript`; memory remains a separate distilled store. |
 | 6 | Evaluation and Artifact Terminology Cleanup | Not started | Pending. |
 | 7 | Portfolio Polish | Not started | Pending. |
 
@@ -212,6 +213,50 @@ Risks / follow-ups:
 
 - Phase 5 should rename runtime/session `history` concepts toward `transcript`.
 - Existing metadata still includes `prefix_*` cache keys for continuity with current reports; the underlying context is now block-based.
+
+### 2026-05-21: Phase 5 Completed
+
+Scope:
+
+- Changed the session conversation schema from `history` to `transcript`.
+- Updated transcript rendering, context section budgets, prompt metadata, evaluator setup, metrics helpers, and tests to use transcript terminology.
+- Kept memory focused on distilled reusable state rather than duplicating the transcript.
+- Added a focused test that verifies new sessions use `transcript` without a runtime `history` alias.
+- Updated benchmark setup terms from `history_count` / `history` budget to `transcript_count` / `transcript`.
+
+Changed files:
+
+- `benchmarks/coding_tasks.json`
+- `docs/architecture/lumen-refactor-plan.md`
+- `docs/architecture/lumen-refactor-progress.md`
+- `docs/architecture/runtime-concepts.md`
+- `lumen/cli.py`
+- `lumen/context_manager.py`
+- `lumen/evaluator.py`
+- `lumen/memory.py`
+- `lumen/metrics.py`
+- `lumen/models.py`
+- `lumen/runtime.py`
+- `lumen/tools.py`
+- `tests/test_context_manager.py`
+- `tests/test_evaluator.py`
+- `tests/test_lumen.py`
+- `tests/test_safety_invariants.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_context_manager.py -q` -> `8 passed`.
+- `uv run python -m pytest tests/test_lumen.py -q` -> `59 passed`.
+- `uv run python -m pytest tests/test_evaluator.py -q` -> `8 passed`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+- `uv run python -m pytest tests/test_metrics.py tests/test_safety_invariants.py -q` -> `16 passed, 1 skipped, 6 warnings`.
+- `uv run python -m pytest -q` -> `106 passed, 1 skipped, 6 warnings`.
+- Fresh benchmark artifact generation -> `12 passed`, `pass_rate: 1.0`.
+
+Risks / follow-ups:
+
+- Existing local sessions that still contain `history` should be reset for this pre-release refactor; the runtime does not keep a normal alias.
+- Phase 6 should finish terminology cleanup in reports and review-pack presentation where useful.
 
 ## Update Template
 

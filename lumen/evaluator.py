@@ -299,13 +299,13 @@ def _apply_task_setup(agent, task, fixture_copy_root):
 
     kind = str(setup.get("kind", "")).strip()
     if kind == "context_reduction":
-        history_count = int(setup.get("history_count", 12))
+        transcript_count = int(setup.get("transcript_count", 12))
         note_count = int(setup.get("note_count", 6))
-        for index in range(history_count):
+        for index in range(transcript_count):
             agent.record(
                 {
                     "role": "user" if index % 2 == 0 else "assistant",
-                    "content": f"benchmark-history-{index}-" + ("A" * 220),
+                    "content": f"benchmark-transcript-{index}-" + ("A" * 220),
                     "created_at": f"2026-04-15T09:{index:02d}:00+00:00",
                 }
             )
@@ -320,7 +320,7 @@ def _apply_task_setup(agent, task, fixture_copy_root):
         agent.context_manager.section_budgets = dict(
             setup.get(
                 "section_budgets",
-                {"prefix": 120, "memory": 120, "relevant_memory": 120, "history": 160},
+                {"prefix": 120, "memory": 120, "relevant_memory": 120, "transcript": 160},
             )
         )
         return
@@ -464,7 +464,7 @@ class BenchmarkEvaluator:
         )
         _apply_task_setup(agent, task, fixture_copy_root)
 
-        initial_history_empty = len(agent.session["history"]) == 0
+        initial_transcript_empty = len(agent.session["transcript"]) == 0
         initial_memory_state = agent.memory.to_dict()
         initial_memory_empty = memorylib.is_effectively_empty(initial_memory_state)
         initial_task_summary_empty = not str(initial_memory_state["working"]["task_summary"]).strip()
@@ -532,7 +532,7 @@ class BenchmarkEvaluator:
             "attempts": task_state.attempts,
             "final_answer": final_answer,
             "stop_reason": task_state.stop_reason,
-            "initial_history_empty": initial_history_empty,
+            "initial_transcript_empty": initial_transcript_empty,
             "initial_memory_empty": initial_memory_empty,
             "initial_task_summary_empty": initial_task_summary_empty,
             "initial_episodic_notes_empty": initial_episodic_notes_empty,

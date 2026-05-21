@@ -49,8 +49,21 @@ def test_agent_runs_tool_then_final(tmp_path):
     answer = agent.ask("Inspect hello.txt")
 
     assert answer == "Read the file successfully."
-    assert any(item["role"] == "tool" and item["name"] == "read_file" for item in agent.session["history"])
+    assert any(item["role"] == "tool" and item["name"] == "read_file" for item in agent.session["transcript"])
     assert "hello.txt" in agent.session["memory"]["files"]
+
+
+def test_session_uses_transcript_without_history_alias(tmp_path):
+    agent = build_agent(tmp_path, ["<final>Done.</final>"])
+
+    assert "transcript" in agent.session
+    assert "history" not in agent.session
+
+    assert agent.ask("Record this turn") == "Done."
+
+    assert [item["role"] for item in agent.session["transcript"]] == ["user", "assistant"]
+    assert "history" not in agent.session
+    assert agent.session["memory"]["working"]["task_summary"] == "Record this turn"
 
 
 def test_agent_updates_task_summary_on_each_request(tmp_path):
@@ -137,7 +150,7 @@ def test_agent_retries_after_empty_model_output(tmp_path):
     answer = agent.ask("Do the task")
 
     assert answer == "Recovered after retry."
-    notices = [item["content"] for item in agent.session["history"] if item["role"] == "assistant"]
+    notices = [item["content"] for item in agent.session["transcript"] if item["role"] == "assistant"]
     assert any("empty response" in item for item in notices)
 
 
@@ -155,8 +168,8 @@ def test_agent_retries_after_malformed_tool_payload(tmp_path):
     answer = agent.ask("Inspect hello.txt")
 
     assert answer == "Recovered after malformed tool output."
-    assert any(item["role"] == "tool" and item["name"] == "read_file" for item in agent.session["history"])
-    notices = [item["content"] for item in agent.session["history"] if item["role"] == "assistant"]
+    assert any(item["role"] == "tool" and item["name"] == "read_file" for item in agent.session["transcript"])
+    notices = [item["content"] for item in agent.session["transcript"] if item["role"] == "assistant"]
     assert any("valid <tool> call" in item for item in notices)
 
 
@@ -203,7 +216,7 @@ def test_agent_saves_and_resumes_session(tmp_path):
         approval_policy="auto",
     )
 
-    assert resumed.session["history"][0]["content"] == "Start a session"
+    assert resumed.session["transcript"][0]["content"] == "Start a session"
     assert resumed.ask("Continue") == "Resumed."
 
 
@@ -220,7 +233,7 @@ def test_delegate_uses_child_agent(tmp_path):
     answer = agent.ask("Use delegation")
 
     assert answer == "Parent incorporated the child result."
-    tool_events = [item for item in agent.session["history"] if item["role"] == "tool"]
+    tool_events = [item for item in agent.session["transcript"] if item["role"] == "tool"]
     assert tool_events[0]["name"] == "delegate"
     assert "delegate_result" in tool_events[0]["content"]
 
@@ -925,7 +938,7 @@ def test_prompt_budget_metadata_records_budget_decisions(tmp_path):
         agent.record(
             {
                 "role": "user" if index % 2 == 0 else "assistant",
-                "content": f"history-{index}-" + ("A" * 240),
+                "content": f"transcript-{index}-" + ("A" * 240),
                 "created_at": f"2026-04-07T10:0{index}:00+00:00",
             }
         )
@@ -935,7 +948,7 @@ def test_prompt_budget_metadata_records_budget_decisions(tmp_path):
         "prefix": 80,
         "memory": 80,
         "relevant_memory": 80,
-        "history": 80,
+        "transcript": 80,
     }
 
     assert agent.ask("recall") == "Done."
@@ -989,7 +1002,7 @@ def test_agent_creates_checkpoint_when_context_reduction_happens_and_artifacts_o
         agent.record(
             {
                 "role": "user" if index % 2 == 0 else "assistant",
-                "content": f"history-{index}-" + ("A" * 260),
+                "content": f"transcript-{index}-" + ("A" * 260),
                 "created_at": f"2026-04-07T10:{index:02d}:00+00:00",
             }
         )
@@ -999,7 +1012,7 @@ def test_agent_creates_checkpoint_when_context_reduction_happens_and_artifacts_o
         "prefix": 120,
         "memory": 120,
         "relevant_memory": 120,
-        "history": 160,
+        "transcript": 160,
     }
 
     assert agent.ask("Resume the long task") == "Done after checkpoint."
@@ -1031,7 +1044,7 @@ def test_agent_creates_checkpoint_when_context_reduction_happens_and_artifacts_o
     assert "current_goal" not in checkpoint_events[-1]
 
 
-def test_resume_prompt_uses_checkpoint_state_not_just_history(tmp_path):
+def test_resume_prompt_uses_checkpoint_state_not_just_transcript(tmp_path):
     agent = build_agent(tmp_path, ["<final>checkpoint ready.</final>"])
     agent.session["checkpoints"] = {
         "current_id": "ckpt_manual",
@@ -1391,7 +1404,7 @@ def test_resume_records_runtime_identity_mismatch_fields_in_metadata_and_trace(t
     ]
 
 
-def test_partial_success_creates_process_note_for_exploration_history(tmp_path):
+def test_partial_success_creates_process_note_for_exploration_transcript(tmp_path):
     agent = build_agent(tmp_path, [])
 
     agent.run_tool(

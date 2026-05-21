@@ -74,7 +74,7 @@ Instead of:
 
 ```text
 runtime fields
-  -> prefix string + memory string + history string
+  -> prefix string + memory string + transcript string
   -> prompt
 ```
 
