@@ -136,6 +136,7 @@ Deliverables:
 - Define session, run, task state, transcript, memory, model context, prompt, trace, report, checkpoint, workspace, and tools.
 - Include a compact architecture diagram.
 - Document why Lumen remains single-agent and lightweight.
+- Concept reference: [Runtime Concepts](runtime-concepts.md).
 
 Validation:
 

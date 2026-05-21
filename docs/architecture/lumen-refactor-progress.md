@@ -10,6 +10,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Local path | Current local checkout |
 | Planning baseline | Completed |
 | Code rename | Completed |
+| Runtime concept documentation | Completed |
 | Context architecture refactor | Not started |
 | Full test status | `104 passed, 1 skipped, 6 warnings` after Phase 1 |
 
@@ -19,7 +20,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | --- | --- | --- | --- |
 | 0 | Planning Baseline | Completed | Plan and progress docs were added. |
 | 1 | Project Identity Rename | Completed | Package, CLI, runtime paths, tests, docs, and benchmark terminology now use Lumen. |
-| 2 | Runtime Concept Documentation | Not started | Pending. |
+| 2 | Runtime Concept Documentation | Completed | Runtime vocabulary, boundaries, and lightweight architecture rationale are documented. |
 | 3 | Structured ModelContext | Not started | Pending. |
 | 4 | Explicit Context Blocks | Not started | Pending. |
 | 5 | Transcript, Memory, and Session Cleanup | Not started | Pending. |
@@ -115,6 +116,34 @@ Risks / follow-ups:
 - Phase 2 should document the new runtime vocabulary before deeper context refactoring.
 - Existing local pre-Phase-1 run/session artifacts are not migrated; new runs use `.lumen/`.
 - The remaining warnings are existing `datetime.utcnow()` deprecation warnings in metrics code.
+
+### 2026-05-21: Phase 2 Completed
+
+Scope:
+
+- Added a runtime concept document that defines session, run, task state, transcript, memory, model context, prompt, trace, report, checkpoint, workspace, tools, and evaluator.
+- Documented the intended boundary between state, memory, transcript, context, prompt, trace, run, session, and workspace.
+- Documented why Lumen should remain a compact single-agent runtime for the current project size.
+- Linked the concept document from the refactor plan and README.
+- No runtime behavior changes.
+
+Changed files:
+
+- `README.md`
+- `docs/architecture/lumen-refactor-plan.md`
+- `docs/architecture/lumen-refactor-progress.md`
+- `docs/architecture/runtime-concepts.md`
+
+Validation:
+
+- Documentation reviewed against the Phase 1 code layout.
+- `uv run lumen --help` completed successfully.
+- `uv run python -m pytest tests/test_evaluator.py -q` -> `8 passed`.
+
+Risks / follow-ups:
+
+- Phase 3 should introduce the small `ModelContext` abstraction described in the concept document.
+- Some implementation names still use existing internal terms such as session `history`; those are intentionally left for Phase 5.
 
 ## Update Template
 

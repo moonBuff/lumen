@@ -186,3 +186,11 @@ uv run lumen --provider deepseek
 ```bash
 uv run ruff check .
 ```
+
+## Architecture
+
+Runtime vocabulary and refactor progress:
+
+- [Runtime Concepts](docs/architecture/runtime-concepts.md)
+- [Refactor Plan](docs/architecture/lumen-refactor-plan.md)
+- [Refactor Progress](docs/architecture/lumen-refactor-progress.md)
