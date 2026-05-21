@@ -12,8 +12,9 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Code rename | Completed |
 | Runtime concept documentation | Completed |
 | Structured model context | Completed |
+| Explicit context blocks | Completed |
 | Context architecture refactor | In progress |
-| Full test status | `105 passed, 1 skipped, 6 warnings` after Phase 3 |
+| Full test status | `105 passed, 1 skipped, 6 warnings` after Phase 4 |
 
 ## Phase Tracker
 
@@ -23,7 +24,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 1 | Project Identity Rename | Completed | Package, CLI, runtime paths, tests, docs, and benchmark terminology now use Lumen. |
 | 2 | Runtime Concept Documentation | Completed | Runtime vocabulary, boundaries, and lightweight architecture rationale are documented. |
 | 3 | Structured ModelContext | Completed | Context sections are now structured before prompt rendering. |
-| 4 | Explicit Context Blocks | Not started | Pending. |
+| 4 | Explicit Context Blocks | Completed | Stable prompt context is split into explicit blocks and checkpoint context is a separate section. |
 | 5 | Transcript, Memory, and Session Cleanup | Not started | Pending. |
 | 6 | Evaluation and Artifact Terminology Cleanup | Not started | Pending. |
 | 7 | Portfolio Polish | Not started | Pending. |
@@ -178,6 +179,39 @@ Risks / follow-ups:
 
 - Phase 4 should split the remaining overloaded `prefix` text into explicit context blocks.
 - Session storage still uses `history`; that cleanup remains scoped to Phase 5.
+
+### 2026-05-21: Phase 4 Completed
+
+Scope:
+
+- Split the stable runtime context into explicit renderers for system instructions, tool specs, tool examples, and workspace context.
+- Added stable context block metadata, including block order, block hashes, and block character counts.
+- Moved checkpoint text out of the stable prefix path and into a separate `checkpoint_context` model context section.
+- Kept prompt ordering and cache behavior stable for existing runtime flows.
+- Added focused assertions for explicit context block metadata.
+
+Changed files:
+
+- `lumen/context_manager.py`
+- `lumen/model_context.py`
+- `lumen/runtime.py`
+- `tests/test_context_manager.py`
+- `tests/test_lumen.py`
+- `docs/architecture/lumen-refactor-progress.md`
+
+Validation:
+
+- `uv run python -m pytest tests/test_context_manager.py -q` -> `8 passed`.
+- `uv run python -m pytest tests/test_lumen.py -q` -> `58 passed`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+- `uv run python -m pytest tests/test_evaluator.py -q` -> `8 passed`.
+- `uv run python -m pytest -q` -> `105 passed, 1 skipped, 6 warnings`.
+- Fresh benchmark artifact generation -> `12 passed`, `pass_rate: 1.0`.
+
+Risks / follow-ups:
+
+- Phase 5 should rename runtime/session `history` concepts toward `transcript`.
+- Existing metadata still includes `prefix_*` cache keys for continuity with current reports; the underlying context is now block-based.
 
 ## Update Template
 

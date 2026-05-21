@@ -14,20 +14,23 @@ from .model_context import ContextSection, ModelContext
 DEFAULT_TOTAL_BUDGET = 12000
 DEFAULT_SECTION_BUDGETS = {
     "prefix": 3600,
+    "checkpoint_context": 800,
     "memory": 1600,
     "relevant_memory": 1200,
     "history": 5200,
 }
 DEFAULT_SECTION_FLOORS = {
     "prefix": 1200,
+    "checkpoint_context": 200,
     "memory": 400,
     "relevant_memory": 300,
     "history": 1500,
 }
 # 当 prompt 超预算时，会优先压缩这些 section。
-DEFAULT_REDUCTION_ORDER = ("relevant_memory", "history", "memory", "prefix")
-SECTION_ORDER = ("prefix", "memory", "relevant_memory", "history", "current_request")
+DEFAULT_REDUCTION_ORDER = ("relevant_memory", "history", "memory", "checkpoint_context", "prefix")
+SECTION_ORDER = ("prefix", "checkpoint_context", "memory", "relevant_memory", "history", "current_request")
 CURRENT_REQUEST_SECTION = "current_request"
+CHECKPOINT_CONTEXT_SECTION = "checkpoint_context"
 RELEVANT_MEMORY_LIMIT = 3
 
 
@@ -100,16 +103,12 @@ class ContextManager:
             relevant_memory_enabled = self.agent.feature_enabled("relevant_memory")
             context_reduction_enabled = self.agent.feature_enabled("context_reduction")
         section_texts = {
-            "prefix": str(getattr(self.agent, "prefix", "")),
+            "prefix": self._stable_context_text(),
+            CHECKPOINT_CONTEXT_SECTION: self._checkpoint_context_text(),
             "memory": "Memory:\n- disabled" if not memory_enabled else str(self.agent.memory_text()),
             "history": "",
             CURRENT_REQUEST_SECTION: f"Current user request:\n{user_message}",
         }
-        checkpoint_text = ""
-        if hasattr(self.agent, "render_checkpoint_text"):
-            checkpoint_text = str(self.agent.render_checkpoint_text() or "").strip()
-        if checkpoint_text:
-            section_texts["prefix"] = section_texts["prefix"] + "\n\n" + checkpoint_text
         selected_notes = []
         if memory_enabled and relevant_memory_enabled and hasattr(self.agent, "memory") and hasattr(self.agent.memory, "retrieval_candidates"):
             selected_notes = self.agent.memory.retrieval_candidates(user_message, limit=RELEVANT_MEMORY_LIMIT)
@@ -200,7 +199,18 @@ class ContextManager:
         history = list(getattr(self.agent, "session", {}).get("history", []))
         history_raw = self._raw_history_text(history)
         return {
-            "prefix": SectionRender(raw=section_texts["prefix"], budget=len(section_texts["prefix"]), rendered=section_texts["prefix"], details={}),
+            "prefix": SectionRender(
+                raw=section_texts["prefix"],
+                budget=len(section_texts["prefix"]),
+                rendered=section_texts["prefix"],
+                details=self._section_details("prefix"),
+            ),
+            CHECKPOINT_CONTEXT_SECTION: SectionRender(
+                raw=section_texts[CHECKPOINT_CONTEXT_SECTION],
+                budget=len(section_texts[CHECKPOINT_CONTEXT_SECTION]),
+                rendered=section_texts[CHECKPOINT_CONTEXT_SECTION],
+                details=self._section_details(CHECKPOINT_CONTEXT_SECTION),
+            ),
             "memory": SectionRender(raw=section_texts["memory"], budget=len(section_texts["memory"]), rendered=section_texts["memory"], details={}),
             "relevant_memory": SectionRender(
                 raw=relevant_raw,
@@ -231,6 +241,16 @@ class ContextManager:
         floors.update(self._section_floor_overrides)
         return floors
 
+    def _stable_context_text(self):
+        if hasattr(self.agent, "stable_context_text"):
+            return str(self.agent.stable_context_text())
+        return str(getattr(self.agent, "prefix", ""))
+
+    def _checkpoint_context_text(self):
+        if hasattr(self.agent, "render_checkpoint_text"):
+            return str(self.agent.render_checkpoint_text() or "").strip()
+        return ""
+
     def _render_sections(self, section_texts, budgets, selected_notes=None):
         rendered = {}
         for section in SECTION_ORDER:
@@ -245,8 +265,24 @@ class ContextManager:
             else:
                 raw = section_texts[section]
                 rendered_text = _tail_clip(raw, int(budget)) if budget is not None else raw
-                rendered[section] = SectionRender(raw=raw, budget=int(budget) if budget is not None else 0, rendered=rendered_text, details={})
+                rendered[section] = SectionRender(
+                    raw=raw,
+                    budget=int(budget) if budget is not None else 0,
+                    rendered=rendered_text,
+                    details=self._section_details(section),
+                )
         return rendered
+
+    def _section_details(self, section):
+        if section == "prefix" and hasattr(self.agent, "stable_context_blocks"):
+            blocks = self.agent.stable_context_blocks()
+            return {
+                "block_order": list(blocks),
+                "block_chars": {name: len(str(text)) for name, text in blocks.items()},
+            }
+        if section == CHECKPOINT_CONTEXT_SECTION:
+            return {"source": "checkpoint"}
+        return {}
 
     def _render_relevant_memory(self, selected_notes, budget):
         header = "Relevant memory:"
@@ -452,13 +488,9 @@ class ContextManager:
     def _assemble_prompt(self, rendered):
         # 顺序是刻意设计的：稳定规则放前面，最新请求放最后。
         return "\n\n".join(
-            [
-                rendered["prefix"].rendered,
-                rendered["memory"].rendered,
-                rendered["relevant_memory"].rendered,
-                rendered["history"].rendered,
-                rendered[CURRENT_REQUEST_SECTION].rendered,
-            ]
+            rendered[section].rendered
+            for section in SECTION_ORDER
+            if rendered[section].rendered
         ).strip()
 
     def _metadata(self, prompt, rendered, budgets, reduction_log, selected_notes, user_message, section_texts):
@@ -469,6 +501,8 @@ class ContextManager:
                 "budget_chars": int(budgets.get(section, 0)),
                 "rendered_chars": rendered[section].rendered_chars,
             }
+            if rendered[section].details:
+                section_metadata[section]["details"] = dict(rendered[section].details)
         section_metadata[CURRENT_REQUEST_SECTION] = {
             "raw_chars": len(section_texts[CURRENT_REQUEST_SECTION]),
             "budget_chars": None,

@@ -33,10 +33,23 @@ def test_context_manager_assembles_sections_in_expected_order(tmp_path):
     assert prompt.index("Relevant memory:") < prompt.index("Transcript:")
     assert prompt.index("Transcript:") < prompt.index("Current user request:")
     assert prompt.rstrip().endswith("Current user request:\nWhere is the deploy key?")
-    assert metadata["section_order"] == ["prefix", "memory", "relevant_memory", "history", "current_request"]
+    assert metadata["section_order"] == [
+        "prefix",
+        "checkpoint_context",
+        "memory",
+        "relevant_memory",
+        "history",
+        "current_request",
+    ]
     assert metadata["model_context"]["section_order"] == metadata["section_order"]
-    assert metadata["model_context"]["section_count"] == 5
+    assert metadata["model_context"]["section_count"] == 6
     assert metadata["model_context"]["sections"]["memory"]["name"] == "memory"
+    assert metadata["sections"]["prefix"]["details"]["block_order"] == [
+        "system_instructions",
+        "tool_specs",
+        "tool_examples",
+        "workspace_context",
+    ]
 
 
 def test_context_manager_builds_structured_model_context_before_rendering(tmp_path):
@@ -48,7 +61,14 @@ def test_context_manager_builds_structured_model_context_before_rendering(tmp_pa
     metadata = manager.prompt_metadata(model_context, prompt)
 
     assert isinstance(model_context, ModelContext)
-    assert model_context.section_order == ["prefix", "memory", "relevant_memory", "history", "current_request"]
+    assert model_context.section_order == [
+        "prefix",
+        "checkpoint_context",
+        "memory",
+        "relevant_memory",
+        "history",
+        "current_request",
+    ]
     assert model_context.sections["current_request"].rendered == "Current user request:\nExplain the workspace."
     assert prompt.endswith("Current user request:\nExplain the workspace.")
     assert metadata["model_context"]["sections"]["current_request"]["rendered_chars"] == len(

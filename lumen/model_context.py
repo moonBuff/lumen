@@ -60,7 +60,7 @@ class ModelContext:
 
     def render_prompt(self, section_order=None, separator="\n\n"):
         order = list(section_order or self.section_order)
-        return separator.join(self.sections[name].rendered for name in order).strip()
+        return separator.join(self.sections[name].rendered for name in order if self.sections[name].rendered).strip()
 
     def section_metadata(self):
         return {

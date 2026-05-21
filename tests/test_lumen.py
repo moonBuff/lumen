@@ -966,6 +966,9 @@ def test_prompt_metadata_refreshes_prefix_when_workspace_changes(tmp_path):
     second = agent.prompt_metadata("second", "")
 
     assert first["prefix_hash"] == second["prefix_hash"]
+    assert first["context_block_order"] == ["system_instructions", "tool_specs", "tool_examples", "workspace_context"]
+    assert set(first["context_block_hashes"]) == set(first["context_block_order"])
+    assert first["context_block_chars"]["workspace_context"] > 0
     assert second["prefix_changed"] is False
     assert second["workspace_changed"] is False
 
@@ -974,6 +977,7 @@ def test_prompt_metadata_refreshes_prefix_when_workspace_changes(tmp_path):
     third = agent.prompt_metadata("third", "")
 
     assert third["prefix_hash"] != second["prefix_hash"]
+    assert third["context_block_hashes"]["workspace_context"] != second["context_block_hashes"]["workspace_context"]
     assert third["prefix_changed"] is True
     assert third["workspace_changed"] is True
     assert "demo changed" in agent.prefix
@@ -1562,6 +1566,7 @@ def test_agent_records_model_cache_metadata_in_last_prompt_metadata(tmp_path):
     assert agent.last_prompt_metadata["cache_hit"] is True
     assert agent.last_prompt_metadata["prefix_hash"]
     assert agent.last_prompt_metadata["prompt_cache_key"] == agent.last_prompt_metadata["prefix_hash"]
+    assert agent.last_prompt_metadata["context_block_hashes"]["tool_specs"]
 
 
 def test_recent_transcript_entries_stay_richer_than_older_ones(tmp_path):
