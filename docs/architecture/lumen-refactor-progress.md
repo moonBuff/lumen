@@ -11,8 +11,9 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Planning baseline | Completed |
 | Code rename | Completed |
 | Runtime concept documentation | Completed |
-| Context architecture refactor | Not started |
-| Full test status | `104 passed, 1 skipped, 6 warnings` after Phase 1 |
+| Structured model context | Completed |
+| Context architecture refactor | In progress |
+| Full test status | `105 passed, 1 skipped, 6 warnings` after Phase 3 |
 
 ## Phase Tracker
 
@@ -21,7 +22,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 0 | Planning Baseline | Completed | Plan and progress docs were added. |
 | 1 | Project Identity Rename | Completed | Package, CLI, runtime paths, tests, docs, and benchmark terminology now use Lumen. |
 | 2 | Runtime Concept Documentation | Completed | Runtime vocabulary, boundaries, and lightweight architecture rationale are documented. |
-| 3 | Structured ModelContext | Not started | Pending. |
+| 3 | Structured ModelContext | Completed | Context sections are now structured before prompt rendering. |
 | 4 | Explicit Context Blocks | Not started | Pending. |
 | 5 | Transcript, Memory, and Session Cleanup | Not started | Pending. |
 | 6 | Evaluation and Artifact Terminology Cleanup | Not started | Pending. |
@@ -144,6 +145,39 @@ Risks / follow-ups:
 
 - Phase 3 should introduce the small `ModelContext` abstraction described in the concept document.
 - Some implementation names still use existing internal terms such as session `history`; those are intentionally left for Phase 5.
+
+### 2026-05-21: Phase 3 Completed
+
+Scope:
+
+- Added lightweight `ContextSection` and `ModelContext` dataclasses.
+- Changed `ContextManager` to build structured model context before rendering the prompt.
+- Kept the public `ContextManager.build()` return shape as `(prompt, metadata)` so runtime behavior stays stable.
+- Added model-context metadata to prompt metadata for trace/report inspection.
+- Added focused tests for structured context construction and rendering.
+- Corrected the runtime concept document's evaluator mapping to the current code layout.
+
+Changed files:
+
+- `lumen/__init__.py`
+- `lumen/context_manager.py`
+- `lumen/model_context.py`
+- `tests/test_context_manager.py`
+- `docs/architecture/lumen-refactor-progress.md`
+- `docs/architecture/runtime-concepts.md`
+
+Validation:
+
+- `uv run python -m pytest tests/test_context_manager.py -q` -> `8 passed`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+- `uv run python -m pytest tests/test_evaluator.py tests/test_lumen.py -q` -> `66 passed`.
+- `uv run python -m pytest -q` -> `105 passed, 1 skipped, 6 warnings`.
+- Fresh benchmark artifact generation -> `12 passed`, `pass_rate: 1.0`.
+
+Risks / follow-ups:
+
+- Phase 4 should split the remaining overloaded `prefix` text into explicit context blocks.
+- Session storage still uses `history`; that cleanup remains scoped to Phase 5.
 
 ## Update Template
 

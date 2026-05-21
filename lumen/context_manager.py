@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+
+from .model_context import ContextSection, ModelContext
 
 
 DEFAULT_TOTAL_BUDGET = 12000
@@ -41,20 +42,7 @@ def _tail_clip(text, limit):
     return text[: limit - 3] + "..."
 
 
-@dataclass
-class SectionRender:
-    raw: str
-    budget: int
-    rendered: str
-    details: dict | None = None
-
-    @property
-    def raw_chars(self):
-        return len(self.raw)
-
-    @property
-    def rendered_chars(self):
-        return len(self.rendered)
+SectionRender = ContextSection
 
 
 class ContextManager:
@@ -96,6 +84,12 @@ class ContextManager:
         的最后一道组装工序。`WorkspaceContext` 提供稳定前缀，`LayeredMemory`
         提供工作记忆，这个函数则把它们和当前请求合成一份可控大小的 prompt。
         """
+        model_context = self.build_model_context(user_message)
+        prompt = self.render_prompt(model_context)
+        metadata = self.prompt_metadata(model_context, prompt)
+        return prompt, metadata
+
+    def build_model_context(self, user_message):
         user_message = str(user_message)
         self.section_floors = self._compute_section_floors()
         memory_enabled = True
@@ -132,7 +126,7 @@ class ContextManager:
                 user_message=user_message,
                 section_texts=section_texts,
             )
-            return prompt, metadata
+            return ModelContext(sections=rendered, metadata=metadata)
 
         budgets = dict(self.section_budgets)
         rendered = self._render_sections(section_texts, budgets, selected_notes=selected_notes)
@@ -179,7 +173,21 @@ class ContextManager:
             user_message=user_message,
             section_texts=section_texts,
         )
-        return prompt, metadata
+        return ModelContext(sections=rendered, metadata=metadata)
+
+    def render_prompt(self, model_context):
+        return model_context.render_prompt(SECTION_ORDER)
+
+    def prompt_metadata(self, model_context, prompt=None):
+        prompt = self.render_prompt(model_context) if prompt is None else str(prompt)
+        metadata = dict(model_context.metadata)
+        metadata["prompt_chars"] = len(prompt)
+        metadata["model_context"] = {
+            "section_order": list(model_context.section_order),
+            "section_count": len(model_context.sections),
+            "sections": model_context.section_metadata(),
+        }
+        return metadata
 
     def _render_sections_without_reduction(self, section_texts, selected_notes=None):
         selected_notes = selected_notes or []

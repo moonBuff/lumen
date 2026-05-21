@@ -1,4 +1,4 @@
-from lumen import FakeModelClient, LumenAgent, SessionStore, WorkspaceContext
+from lumen import FakeModelClient, LumenAgent, ModelContext, SessionStore, WorkspaceContext
 from lumen.context_manager import ContextManager
 
 
@@ -34,6 +34,26 @@ def test_context_manager_assembles_sections_in_expected_order(tmp_path):
     assert prompt.index("Transcript:") < prompt.index("Current user request:")
     assert prompt.rstrip().endswith("Current user request:\nWhere is the deploy key?")
     assert metadata["section_order"] == ["prefix", "memory", "relevant_memory", "history", "current_request"]
+    assert metadata["model_context"]["section_order"] == metadata["section_order"]
+    assert metadata["model_context"]["section_count"] == 5
+    assert metadata["model_context"]["sections"]["memory"]["name"] == "memory"
+
+
+def test_context_manager_builds_structured_model_context_before_rendering(tmp_path):
+    agent = build_agent(tmp_path, [])
+    manager = ContextManager(agent)
+
+    model_context = manager.build_model_context("Explain the workspace.")
+    prompt = manager.render_prompt(model_context)
+    metadata = manager.prompt_metadata(model_context, prompt)
+
+    assert isinstance(model_context, ModelContext)
+    assert model_context.section_order == ["prefix", "memory", "relevant_memory", "history", "current_request"]
+    assert model_context.sections["current_request"].rendered == "Current user request:\nExplain the workspace."
+    assert prompt.endswith("Current user request:\nExplain the workspace.")
+    assert metadata["model_context"]["sections"]["current_request"]["rendered_chars"] == len(
+        "Current user request:\nExplain the workspace."
+    )
 
 
 def test_context_manager_reduces_relevant_memory_before_history_and_preserves_newer_context(tmp_path):

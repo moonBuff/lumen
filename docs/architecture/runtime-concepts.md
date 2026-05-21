@@ -49,7 +49,7 @@ The runtime remains single-agent by design. Lumen does not need a graph schedule
 | `Checkpoint` | Recoverable snapshot used for resume and drift detection. It should describe enough state to continue a run safely. | `checkpoint_id` and run/session artifacts. |
 | `Workspace` | The local project files and shell context the agent can inspect or modify. | Workspace context and shell/file tools. |
 | `ToolRegistry` | Tool definitions, risk levels, validation, and execution hooks available to the runtime. | `lumen.tools` and tool execution helpers. |
-| `Evaluator` | Deterministic benchmark and scoring path used to verify runtime behavior. | `lumen.evaluator` and `scripts/run_benchmark.py`. |
+| `Evaluator` | Deterministic benchmark and scoring path used to verify runtime behavior. | `lumen.evaluator` and benchmark helpers. |
 
 ## Boundary Rules
 
