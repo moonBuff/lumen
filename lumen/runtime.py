@@ -49,6 +49,19 @@ DURABLE_MEMORY_LINE_PATTERNS = (
     ("dependency-facts", re.compile(r"^依赖：\s*(.+)$")),
     ("user-preferences", re.compile(r"^偏好：\s*(.+)$")),
 )
+USER_MEMORY_DIRECTIVE_PATTERNS = (
+    re.compile(
+        r"(?is)\b(?:please\s+)?(?:remember|save|store|persist|note|capture)\b"
+        r"(?:\s+(?:this|the following|below|it))?"
+        r"(?:\s+(?:as|into|to)\s+(?:durable memory|long[- ]term memory|project preference|preference|stable fact))?"
+        r"\s*[:：]\s*(.+)"
+    ),
+    re.compile(
+        r"(?s)(?:请)?(?:把)?(?:下面这条|以下内容|这条|这个)?"
+        r"(?:记住|保存|记录|作为.*?长期.*?保存|作为.*?记忆.*?保存)"
+        r"\s*[:：]\s*(.+)"
+    ),
+)
 SECRET_SHAPED_TEXT_PATTERN = re.compile(r"(?i)(\b(api[_ -]?key|token|secret|password)\b|sk-[A-Za-z0-9_-]{6,})")
 
 
@@ -169,7 +182,6 @@ class Lumen:
 
     def _ensure_session_shape(self):
         self.session.setdefault("transcript", [])
-        self.session.pop("history", None)
         self.session.setdefault("memory", memorylib.default_memory_state())
         checkpoints = self.session.setdefault("checkpoints", {})
         if not isinstance(checkpoints, dict):
@@ -758,29 +770,90 @@ class Lumen:
             return "noisy_output"
         return ""
 
-    def extract_durable_promotions(self, user_message, final_answer):
-        user_text = str(user_message or "")
-        if not (DURABLE_MEMORY_INTENT_PATTERN.search(user_text) or DURABLE_MEMORY_INTENT_ZH_PATTERN.search(user_text)):
-            return [], []
+    @staticmethod
+    def _clean_durable_candidate(text):
+        text = str(text or "").strip()
+        text = re.sub(r"(?is)\n\s*(?:respond|reply)\b.+$", "", text).strip()
+        text = re.sub(r"(?s)\n\s*(?:并且|然后|同时).*$", "", text).strip()
+        return text.strip(" \t\r\n\"'`“”‘’")
+
+    @staticmethod
+    def _infer_durable_topic(note_text, user_text=""):
+        haystack = f"{user_text}\n{note_text}".lower()
+        if re.search(r"(?i)\b(prefer|preference|like|want)\b", haystack) or re.search(r"(偏好|希望|喜欢)", haystack):
+            return "user-preferences"
+        if re.search(r"(?i)\b(dependency|runtime|python|package|version|api key|token)\b", haystack) or re.search(r"(依赖|运行时|版本|密钥)", haystack):
+            return "dependency-facts"
+        if re.search(r"(?i)\b(decision|decide|rationale)\b", haystack) or re.search(r"(决策|决定|取舍)", haystack):
+            return "key-decisions"
+        if re.search(r"(?i)\b(convention|policy|rule)\b", haystack) or re.search(r"(约定|规范|规则)", haystack):
+            return "project-conventions"
+        return "user-preferences"
+
+    def _promotions_from_labeled_text(self, text):
         promotions = []
         rejections = []
-        for line in str(final_answer or "").splitlines():
-            text = line.strip()
-            if not text or REDACTED_VALUE in text:
+        for line in str(text or "").splitlines():
+            candidate = self._clean_durable_candidate(line)
+            if not candidate or REDACTED_VALUE in candidate:
                 continue
             for topic, pattern in DURABLE_MEMORY_LINE_PATTERNS:
-                match = pattern.match(text)
+                match = pattern.match(candidate)
                 if not match:
                     continue
-                note_text = match.group(1).strip()
+                note_text = self._clean_durable_candidate(match.group(1))
                 if note_text:
                     reason = self.reject_durable_reason(note_text)
                     if reason:
                         rejections.append(f"{topic}:{reason}")
-                        break
-                    promotions.append((topic, note_text))
+                    else:
+                        promotions.append((topic, note_text))
                 break
         return promotions, rejections
+
+    def extract_user_durable_candidates(self, user_message):
+        user_text = str(user_message or "").strip()
+        if not (DURABLE_MEMORY_INTENT_PATTERN.search(user_text) or DURABLE_MEMORY_INTENT_ZH_PATTERN.search(user_text)):
+            return [], []
+
+        promotions, rejections = self._promotions_from_labeled_text(user_text)
+        if promotions or rejections:
+            return promotions, rejections
+
+        for pattern in USER_MEMORY_DIRECTIVE_PATTERNS:
+            match = pattern.search(user_text)
+            if not match:
+                continue
+            note_text = self._clean_durable_candidate(match.group(1))
+            if not note_text:
+                continue
+            labeled_promotions, labeled_rejections = self._promotions_from_labeled_text(note_text)
+            if labeled_promotions or labeled_rejections:
+                return labeled_promotions, labeled_rejections
+            topic = self._infer_durable_topic(note_text, user_text)
+            reason = self.reject_durable_reason(note_text)
+            if reason:
+                return [], [f"{topic}:{reason}"]
+            return [(topic, note_text)], []
+
+        return [], []
+
+    def extract_durable_promotions(self, user_message, final_answer):
+        user_text = str(user_message or "")
+        if not (DURABLE_MEMORY_INTENT_PATTERN.search(user_text) or DURABLE_MEMORY_INTENT_ZH_PATTERN.search(user_text)):
+            return [], []
+        promotions, rejections = self.extract_user_durable_candidates(user_message)
+        final_promotions, final_rejections = self._promotions_from_labeled_text(final_answer)
+        promotions.extend(final_promotions)
+        rejections.extend(final_rejections)
+        deduped_promotions = []
+        seen_promotions = set()
+        for promotion in promotions:
+            if promotion in seen_promotions:
+                continue
+            seen_promotions.add(promotion)
+            deduped_promotions.append(promotion)
+        return deduped_promotions, rejections
 
     def promote_durable_memory(self, user_message, final_answer):
         promotions, rejections = self.extract_durable_promotions(user_message, final_answer)
@@ -808,7 +881,7 @@ class Lumen:
         它是 CLI 和底层工具/模型之间的核心桥梁。CLI 收到用户输入后基本只做
         一件事：调用 `agent.ask()`。而 `ask()` 内部再去驱动 `ContextManager`
         组 prompt、`model_client.complete()` 调模型、`run_tool()` 执行动作。
-        如果新人想理解 lumen 是怎么“从一句话跑成一个 agent 流程”的，
+        lumen 是怎么“从一句话跑成一个 agent 流程”的，
         这里就是最关键的入口。
         """
         run_started_at = time.monotonic()

@@ -1627,6 +1627,48 @@ def test_explicit_memory_promotion_persists_durable_memory_topics(tmp_path):
     ]
 
 
+def test_user_memory_request_promotes_preference_without_labeled_final(tmp_path):
+    agent = build_agent(tmp_path, ["<final>Got it.</final>"])
+
+    answer = agent.ask("Remember: I prefer clear runtime boundaries over compatibility shims.")
+
+    assert answer == "Got it."
+    preferences_path = tmp_path / ".lumen" / "memory" / "topics" / "user-preferences.md"
+    report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
+
+    assert "clear runtime boundaries over compatibility shims" in preferences_path.read_text(encoding="utf-8")
+    assert report["durable_promotions"] == [
+        "user-preferences: I prefer clear runtime boundaries over compatibility shims.",
+    ]
+
+
+def test_user_memory_request_supports_chinese_preference_without_labeled_final(tmp_path):
+    agent = build_agent(tmp_path, ["<final>已记录。</final>"])
+
+    agent.ask("请记住：我偏好 Lumen 架构优化时优先保持职责清晰，不为了兼容旧状态增加复杂度。")
+
+    preferences_path = tmp_path / ".lumen" / "memory" / "topics" / "user-preferences.md"
+    report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
+
+    assert "优先保持职责清晰" in preferences_path.read_text(encoding="utf-8")
+    assert report["durable_promotions"] == [
+        "user-preferences: 我偏好 Lumen 架构优化时优先保持职责清晰，不为了兼容旧状态增加复杂度。",
+    ]
+
+
+def test_user_memory_request_rejects_secret_shaped_request_text(tmp_path):
+    agent = build_agent(tmp_path, ["<final>Got it.</final>"])
+
+    agent.ask("Remember: API key is sk-live-secret-abc.")
+
+    report = json.loads(agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8"))
+    dependency_path = tmp_path / ".lumen" / "memory" / "topics" / "dependency-facts.md"
+
+    assert report["durable_promotions"] == []
+    assert report["durable_rejections"] == ["dependency-facts:secret_shaped"]
+    assert not dependency_path.exists()
+
+
 def test_explicit_memory_promotion_supports_chinese_intent_and_labels(tmp_path):
     agent = build_agent(
         tmp_path,

@@ -17,7 +17,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Evaluation artifact terminology | Completed |
 | Context architecture refactor | In progress |
 | DeepSeek provider client | Completed |
-| Focused test status | `63 passed`; `11 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 8 |
+| Focused test status | `66 passed`; `16 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 9 |
 
 ## Phase Tracker
 
@@ -32,7 +32,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 6 | Evaluation and Artifact Terminology Cleanup | Completed | Reports and benchmark rows now expose model-context sections and context-block order. |
 | 7 | Compatibility Cleanup | Completed | Runtime and memory code now use only the current session, memory, and provider configuration schema. |
 | 8 | DeepSeek Provider Client | Completed | DeepSeek now uses a dedicated chat-completions client instead of the Anthropic-compatible adapter. |
-| 9 | Durable Memory Promotion | Not started | Planned next. |
+| 9 | Durable Memory Promotion | Completed | Explicit user memory requests now create durable-memory candidates before final-answer label parsing. |
 | 10 | Run Failure Finalization | Not started | Planned after durable memory. |
 | 11 | Controlled File Deletion Tool | Not started | Planned after run failure handling. |
 | 12 | Tool Budget and Limit Strategy | Not started | Planned after tool surface cleanup. |
@@ -366,6 +366,34 @@ Risks / follow-ups:
 
 - DeepSeek reasoning-only responses now fail with a clearer provider-specific error; Phase 10 should ensure such model errors always finalize the run artifact cleanly.
 - Local `.env` files using the old DeepSeek Anthropic-compatible base URL should be updated to the native DeepSeek API base.
+
+### 2026-05-27: Phase 9 Completed
+
+Scope:
+
+- Added a user-request extraction path for durable memory promotion.
+- Natural requests such as `Remember: ...` and `请记住：...` now create durable-memory candidates even when the model final answer is unlabeled.
+- Kept the existing labeled final-answer path for `Project convention:`, `Decision:`, `Dependency:`, and `Preference:` facts.
+- Reused runtime审核 for secret-shaped text, transient task state, noisy output, dedupe, and supersede behavior.
+- Added tests for English and Chinese preference capture plus secret-shaped request rejection.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/runtime.py`
+- `tests/test_lumen.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_lumen.py -q` -> `66 passed`.
+- `uv run python -m pytest tests/test_memory.py tests/test_safety_invariants.py -q` -> `16 passed, 1 skipped`.
+- `uv run python -m pytest tests/test_metrics.py -q` -> `5 passed, 6 warnings`.
+- `uv run python -m ruff check lumen tests` -> all checks passed.
+
+Risks / follow-ups:
+
+- Topic inference remains intentionally lightweight and rule-based; it is enough for explicit user preferences and stable facts, but not a full semantic memory classifier.
+- Phase 10 should make model/runtime exceptions finalize run artifacts cleanly instead of leaving incomplete runs.
 
 ## Update Template
 
