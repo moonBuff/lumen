@@ -42,6 +42,11 @@ BASE_TOOL_SPECS = {
         "risky": True,
         "description": "Replace one exact text block in a file.",
     },
+    "delete_file": {
+        "schema": {"path": "str"},
+        "risky": True,
+        "description": "Delete one regular file from the workspace.",
+    },
 }
 
 DELEGATE_TOOL_SPEC = {
@@ -57,6 +62,7 @@ TOOL_EXAMPLES = {
     "run_shell": '<tool>{"name":"run_shell","args":{"command":"uv run --with pytest python -m pytest -q","timeout":20}}</tool>',
     "write_file": '<tool name="write_file" path="binary_search.py"><content>def binary_search(nums, target):\n    return -1\n</content></tool>',
     "patch_file": '<tool name="patch_file" path="binary_search.py"><old_text>return -1</old_text><new_text>return mid</new_text></tool>',
+    "delete_file": '<tool>{"name":"delete_file","args":{"path":"scratch.txt"}}</tool>',
     "delegate": '<tool>{"name":"delegate","args":{"task":"inspect README.md","max_steps":3}}</tool>',
 }
 
@@ -137,6 +143,17 @@ def validate_tool(agent, name, args):
         count = text.count(old_text)
         if count != 1:
             raise ValueError(f"old_text must occur exactly once, found {count}")
+        return
+
+    if name == "delete_file":
+        path = agent.path(args["path"])
+        if not path.exists():
+            raise ValueError("path does not exist")
+        if not path.is_file():
+            raise ValueError("path is not a file")
+        relative_parts = path.relative_to(agent.root).parts
+        if any(part in {".git", ".lumen"} for part in relative_parts):
+            raise ValueError("cannot delete internal repository or agent state")
         return
 
     if name == "delegate":
@@ -258,6 +275,20 @@ def tool_patch_file(agent, args):
     return f"patched {path.relative_to(agent.root)}"
 
 
+def tool_delete_file(agent, args):
+    path = agent.path(args["path"])
+    if not path.exists():
+        raise ValueError("path does not exist")
+    if not path.is_file():
+        raise ValueError("path is not a file")
+    relative_parts = path.relative_to(agent.root).parts
+    if any(part in {".git", ".lumen"} for part in relative_parts):
+        raise ValueError("cannot delete internal repository or agent state")
+    relative = path.relative_to(agent.root)
+    path.unlink()
+    return f"deleted {relative}"
+
+
 def tool_delegate(agent, args):
     if agent.depth >= agent.max_depth:
         raise ValueError("delegate depth exceeded")
@@ -283,8 +314,9 @@ def tool_delegate(agent, args):
     )
     # 委派的目标是“调查”，不是“放权执行”。
     # 子 agent 以只读方式运行、步数更少，最后只把结论文本返回给父 agent。
-    child.session["memory"]["task"] = task
-    child.session["memory"]["notes"] = [clip(agent.transcript_text(), 300)]
+    child.memory.set_task_summary(task)
+    child.memory.append_note(clip(agent.transcript_text(), 300), tags=("delegate",), source="parent_transcript")
+    child.session["memory"] = child.memory.to_dict()
     return "delegate_result:\n" + child.ask(task)
 
 
@@ -295,4 +327,5 @@ _TOOL_RUNNERS = {
     "run_shell": tool_run_shell,
     "write_file": tool_write_file,
     "patch_file": tool_patch_file,
+    "delete_file": tool_delete_file,
 }

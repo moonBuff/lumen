@@ -37,6 +37,16 @@ def test_workspace_escape_is_rejected(tmp_path):
     assert "path escapes workspace" in result
 
 
+def test_delete_file_rejects_workspace_escape(tmp_path):
+    (tmp_path / "outside.txt").write_text("outside\n", encoding="utf-8")
+    agent = build_agent(tmp_path, [])
+
+    result = agent.run_tool("delete_file", {"path": "../outside.txt"})
+
+    assert "path escapes workspace" in result
+    assert (tmp_path / "outside.txt").exists()
+
+
 def test_symlink_path_traversal_is_rejected(tmp_path):
     outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
     outside.write_text("outside\n", encoding="utf-8")
@@ -53,12 +63,37 @@ def test_symlink_path_traversal_is_rejected(tmp_path):
     assert "path escapes workspace" in result
 
 
+def test_delete_file_rejects_directories_and_internal_state(tmp_path):
+    agent = build_agent(tmp_path, [])
+    (tmp_path / "notes").mkdir()
+    (tmp_path / ".lumen" / "keep.txt").parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".lumen" / "keep.txt").write_text("keep\n", encoding="utf-8")
+
+    directory_result = agent.run_tool("delete_file", {"path": "notes"})
+    internal_result = agent.run_tool("delete_file", {"path": ".lumen/keep.txt"})
+
+    assert "path is not a file" in directory_result
+    assert "cannot delete internal repository or agent state" in internal_result
+    assert (tmp_path / "notes").exists()
+    assert (tmp_path / ".lumen" / "keep.txt").exists()
+
+
 def test_risky_tool_deny_behavior(tmp_path):
     agent = build_agent(tmp_path, [], approval_policy="never")
 
     result = agent.run_tool("run_shell", {"command": "echo hi", "timeout": 20})
 
     assert result == "error: approval denied for run_shell"
+
+
+def test_delete_file_requires_approval(tmp_path):
+    (tmp_path / "scratch.txt").write_text("temporary\n", encoding="utf-8")
+    agent = build_agent(tmp_path, [], approval_policy="never")
+
+    result = agent.run_tool("delete_file", {"path": "scratch.txt"})
+
+    assert result == "error: approval denied for delete_file"
+    assert (tmp_path / "scratch.txt").exists()
 
 
 def test_cli_build_agent_wires_secret_env_names_from_parser(tmp_path):

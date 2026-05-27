@@ -17,7 +17,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Evaluation artifact terminology | Completed |
 | Context architecture refactor | In progress |
 | DeepSeek provider client | Completed |
-| Focused test status | `67 passed`; `29 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 10 |
+| Focused test status | `82 passed, 1 skipped`; `26 passed`; `5 passed, 6 warnings` after Phase 11 |
 
 ## Phase Tracker
 
@@ -34,7 +34,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 8 | DeepSeek Provider Client | Completed | DeepSeek now uses a dedicated chat-completions client instead of the Anthropic-compatible adapter. |
 | 9 | Durable Memory Promotion | Completed | Explicit user memory requests now create durable-memory candidates before final-answer label parsing. |
 | 10 | Run Failure Finalization | Completed | Model errors now finalize failed task state, trace, checkpoint, and report artifacts. |
-| 11 | Controlled File Deletion Tool | Not started | Planned after run failure handling. |
+| 11 | Controlled File Deletion Tool | Completed | Added a risky `delete_file` tool with workspace boundary checks, approval, and trace metadata. |
 | 12 | Tool Budget and Limit Strategy | Not started | Planned after tool surface cleanup. |
 
 ## Progress Entries
@@ -422,6 +422,36 @@ Risks / follow-ups:
 
 - This phase handles model-client `RuntimeError` paths. Broader runtime exception classification can be expanded later if needed.
 - Phase 11 should add a controlled file deletion tool so the model does not need to use shell commands for simple file removal.
+
+### 2026-05-27: Phase 11 Completed
+
+Scope:
+
+- Added a first-class `delete_file(path)` tool.
+- Kept deletion inside the normal risky-tool pipeline, including approval, workspace snapshots, trace metadata, and diff summaries.
+- Rejected workspace escape, directory deletion, and deletion under `.git` or `.lumen`.
+- Updated prompt tool instructions and examples so the model can prefer `delete_file` over shell commands for simple file removal.
+- Added trace-contract and safety regression tests for controlled deletion.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/runtime.py`
+- `lumen/tools.py`
+- `tests/test_lumen.py`
+- `tests/test_safety_invariants.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_lumen.py tests/test_safety_invariants.py -q` -> `82 passed, 1 skipped`.
+- `uv run python -m pytest tests/test_context_manager.py tests/test_evaluator.py tests/test_run_store.py tests/test_task_state.py -q` -> `26 passed`.
+- `uv run python -m pytest tests/test_metrics.py -q` -> `5 passed, 6 warnings`.
+- `uv run python -m ruff check lumen tests` -> all checks passed.
+
+Risks / follow-ups:
+
+- `delete_file` intentionally deletes only regular files, not directories.
+- Phase 12 should tune tool budget and prompt strategy to reduce avoidable step-limit stops on larger code-reading tasks.
 
 ## Update Template
 

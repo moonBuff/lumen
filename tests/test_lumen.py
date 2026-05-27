@@ -1426,6 +1426,34 @@ def test_write_file_trace_records_minimum_tool_contract_fields(tmp_path):
     assert tool_event["diff_summary"] == ["created:notes.txt"]
 
 
+def test_delete_file_trace_records_minimum_tool_contract_fields(tmp_path):
+    (tmp_path / "scratch.txt").write_text("temporary\n", encoding="utf-8")
+    agent = build_agent(
+        tmp_path,
+        [
+            '<tool>{"name":"delete_file","args":{"path":"scratch.txt"}}</tool>',
+            "<final>Done.</final>",
+        ],
+    )
+
+    assert agent.ask("Delete scratch.txt") == "Done."
+    assert not (tmp_path / "scratch.txt").exists()
+
+    trace_events = [
+        json.loads(line)
+        for line in agent.run_store.trace_path(agent.current_task_state).read_text(encoding="utf-8").splitlines()
+    ]
+    tool_event = [event for event in trace_events if event["event"] == "tool_executed"][-1]
+
+    assert tool_event["name"] == "delete_file"
+    assert tool_event["risk_level"] == "high"
+    assert tool_event["read_only"] is False
+    assert tool_event["tool_status"] == "ok"
+    assert tool_event["affected_paths"] == ["scratch.txt"]
+    assert tool_event["workspace_changed"] is True
+    assert tool_event["diff_summary"] == ["deleted:scratch.txt"]
+
+
 def test_resume_marks_schema_mismatch_when_checkpoint_version_is_incompatible(tmp_path):
     agent = build_agent(tmp_path, ["<final>checkpoint ready.</final>"])
     agent.session["checkpoints"] = {

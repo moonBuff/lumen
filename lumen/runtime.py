@@ -391,12 +391,12 @@ class Lumen:
               <final>your answer</final>
             - Never invent tool results.
             - Keep answers concise and concrete.
-            - If the user asks you to create or update a specific file and the path is clear, use write_file or patch_file instead of repeatedly listing files.
+            - If the user asks you to create, update, or delete a specific file and the path is clear, use write_file, patch_file, or delete_file instead of repeatedly listing files.
             - Before writing tests for existing code, read the implementation first.
             - When writing tests, match the current implementation unless the user explicitly asked you to change the code.
             - New files should be complete and runnable, including obvious imports.
             - Do not repeat the same tool call with the same arguments if it did not help. Choose a different tool or return a final answer.
-            - Required tool arguments must not be empty. Do not call read_file, write_file, patch_file, run_shell, or delegate with args={}.
+            - Required tool arguments must not be empty. Do not call read_file, write_file, patch_file, delete_file, run_shell, or delegate with args={}.
             """
         ).strip()
 
@@ -415,6 +415,7 @@ class Lumen:
                 '<tool>{"name":"read_file","args":{"path":"README.md","start":1,"end":80}}</tool>',
                 '<tool name="write_file" path="binary_search.py"><content>def binary_search(nums, target):\n    return -1\n</content></tool>',
                 '<tool name="patch_file" path="binary_search.py"><old_text>return -1</old_text><new_text>return mid</new_text></tool>',
+                '<tool>{"name":"delete_file","args":{"path":"scratch.txt"}}</tool>',
                 '<tool>{"name":"run_shell","args":{"command":"uv run --with pytest python -m pytest -q","timeout":20}}</tool>',
                 "<final>Done.</final>",
             ]
@@ -714,13 +715,13 @@ class Lumen:
         canonical_path = self.memory.canonical_path(path)
         # 不是所有工具结果都进入工作记忆。
         # 读文件会生成摘要；写文件/patch 会让旧摘要失效，因为它们可能过期了。
-        if name in {"read_file", "write_file", "patch_file"}:
+        if name in {"read_file", "write_file", "patch_file", "delete_file"}:
             self.memory.remember_file(canonical_path)
         if name == "read_file":
             summary = memorylib.summarize_read_result(result)
             self.memory.set_file_summary(canonical_path, summary)
             self.memory.append_note(summary, tags=(canonical_path,), source=canonical_path)
-        elif name in {"write_file", "patch_file"}:
+        elif name in {"write_file", "patch_file", "delete_file"}:
             self.memory.invalidate_file_summary(canonical_path)
 
     def note_tool(self, name, args, result):
@@ -1351,6 +1352,9 @@ class Lumen:
 
     def tool_patch_file(self, args):
         return toolkit.tool_patch_file(self, args)
+
+    def tool_delete_file(self, args):
+        return toolkit.tool_delete_file(self, args)
 
     def tool_delegate(self, args):
         return toolkit.tool_delegate(self, args)
