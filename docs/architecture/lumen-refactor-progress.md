@@ -15,9 +15,9 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Explicit context blocks | Completed |
 | Transcript/session cleanup | Completed |
 | Evaluation artifact terminology | Completed |
-| Context architecture refactor | In progress |
+| Context architecture refactor | Completed |
 | DeepSeek provider client | Completed |
-| Focused test status | `82 passed, 1 skipped`; `26 passed`; `5 passed, 6 warnings` after Phase 11 |
+| Focused test status | `78 passed`; `13 passed, 6 warnings`; smoke `6/6 checks` after Phase 13 |
 
 ## Phase Tracker
 
@@ -35,7 +35,8 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 9 | Durable Memory Promotion | Completed | Explicit user memory requests now create durable-memory candidates before final-answer label parsing. |
 | 10 | Run Failure Finalization | Completed | Model errors now finalize failed task state, trace, checkpoint, and report artifacts. |
 | 11 | Controlled File Deletion Tool | Completed | Added a risky `delete_file` tool with workspace boundary checks, approval, and trace metadata. |
-| 12 | Tool Budget and Limit Strategy | Not started | Planned after tool surface cleanup. |
+| 12 | Tool Budget and Limit Strategy | Completed | Default model budgets and near-limit tool guidance were tuned. |
+| 13 | Smoke Regression Harness | Completed | Added a deterministic local smoke regression for core runtime abilities. |
 
 ## Progress Entries
 
@@ -484,6 +485,35 @@ Risks / follow-ups:
 
 - The larger default budget may slightly increase token usage on real providers, but should reduce premature stop-limit failures.
 - The existing metrics warning still comes from `datetime.utcnow()` and can be cleaned in a future maintenance pass.
+
+### 2026-05-27: Phase 13 Completed
+
+Scope:
+
+- Added a deterministic smoke regression module for core local runtime abilities.
+- Covered read-file, controlled delete, explicit durable-memory persistence, run report creation, and final-answer stop reasons without calling a real provider.
+- Added a script entry point for local smoke checks under `.lumen/smoke-regression/`.
+- Added pytest coverage for the smoke artifact and expected checks.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/smoke.py`
+- `scripts/run_smoke_regression.py`
+- `tests/test_smoke.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_smoke.py -q` -> `1 passed`.
+- `uv run python scripts/run_smoke_regression.py --workspace-root .lumen/smoke-regression --artifact-path .lumen/smoke-regression/artifact.json` -> `6/6 checks passed`.
+- `uv run python -m pytest tests/test_smoke.py tests/test_lumen.py -q` -> `70 passed`.
+- `uv run python -m pytest tests/test_evaluator.py tests/test_metrics.py -q` -> `13 passed, 6 warnings`.
+- `uv run python -m ruff check lumen tests scripts` -> all checks passed.
+
+Risks / follow-ups:
+
+- This smoke harness validates runtime wiring with scripted model outputs. Real provider behavior should still be checked manually after larger prompt or client changes.
+- The smoke artifact is written under ignored `.lumen/` local state by default and is not committed.
 
 ## Update Template
 
