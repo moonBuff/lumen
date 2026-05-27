@@ -350,6 +350,128 @@ class OpenAICompatibleModelClient:
         return _extract_openai_text(data)
 
 
+def _extract_deepseek_text(data):
+    choices = data.get("choices", [])
+    if not choices:
+        return ""
+    message = choices[0].get("message", {})
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str) and text:
+                    parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+def _deepseek_response_shape(data):
+    keys = ", ".join(sorted(str(key) for key in data.keys())) or "none"
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return f"keys=[{keys}], choices={type(choices).__name__}"
+    message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+    if not isinstance(message, dict):
+        return f"keys=[{keys}], message={type(message).__name__}"
+    message_keys = ", ".join(sorted(str(key) for key in message.keys())) or "none"
+    reasoning_present = bool(message.get("reasoning_content"))
+    content_type = type(message.get("content")).__name__
+    return f"keys=[{keys}], message_keys=[{message_keys}], content_type={content_type}, reasoning_content={reasoning_present}"
+
+
+class DeepSeekModelClient:
+    def __init__(self, model, base_url, api_key, temperature, timeout):
+        self.model = model
+        self.base_url = _normalize_versioned_base_url(base_url)
+        self.api_key = api_key
+        self.temperature = temperature
+        self.timeout = timeout
+        self.supports_prompt_cache = False
+        self.last_completion_metadata = {}
+
+    def complete(self, prompt, max_new_tokens, prompt_cache_key=None, prompt_cache_retention=None):
+        del prompt_cache_key, prompt_cache_retention
+        self.last_completion_metadata = {}
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "max_tokens": max_new_tokens,
+            "stream": False,
+        }
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": OPENAI_COMPATIBLE_USER_AGENT,
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        request = urllib.request.Request(
+            self.base_url + "/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        attempts = 3
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    body_text = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                if exc.code >= 500 and attempt < attempts - 1:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"DeepSeek request failed with HTTP {exc.code}: {body}") from exc
+            except (urllib.error.URLError, RemoteDisconnected) as exc:
+                if attempt < attempts - 1:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise RuntimeError(
+                    "Could not reach DeepSeek.\n"
+                    f"Base URL: {self.base_url}\n"
+                    f"Model: {self.model}"
+                ) from exc
+
+        try:
+            data = json.loads(body_text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("DeepSeek error: backend returned non-JSON content that could not be parsed") from exc
+        if data.get("error"):
+            raise RuntimeError(f"DeepSeek error: {data['error']}")
+        self.last_completion_metadata = {
+            "prompt_cache_supported": False,
+            "prompt_cache_key": None,
+            "prompt_cache_retention": None,
+            **_extract_usage_cache_details(data),
+        }
+        text = _extract_deepseek_text(data)
+        if text:
+            return text
+        raise RuntimeError(
+            "DeepSeek error: could not extract message content from response "
+            f"({_deepseek_response_shape(data)})"
+        )
+
+
 def _extract_text_from_content_blocks(content):
     if isinstance(content, str):
         return content

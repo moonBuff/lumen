@@ -32,28 +32,20 @@ def test_provider_profile_loads_project_env_before_reading_deepseek_config(tmp_p
             [
                 "LUMEN_DEEPSEEK_API_KEY=sk-project-deepseek",
                 "LUMEN_DEEPSEEK_MODEL=deepseek-v4-pro",
-                "LUMEN_DEEPSEEK_API_BASE=https://api.deepseek.com/anthropic",
+                "LUMEN_DEEPSEEK_API_BASE=https://api.deepseek.com",
             ]
         )
         + "\n",
         encoding="utf-8",
     )
 
-    with patch.dict(
-        os.environ,
-        {
-            "DEEPSEEK_API_KEY": "sk-legacy-deepseek",
-            "DEEPSEEK_MODEL": "legacy-deepseek-model",
-            "DEEPSEEK_API_BASE": "https://legacy.deepseek.example/anthropic",
-        },
-        clear=True,
-    ):
+    with patch.dict(os.environ, {}, clear=True):
         profile = _provider_profile("deepseek")
 
     assert profile["status"] == "ready"
     assert profile["api_key"] == "sk-project-deepseek"
     assert profile["model"] == "deepseek-v4-pro"
-    assert profile["base_url"] == "https://api.deepseek.com/anthropic"
+    assert profile["base_url"] == "https://api.deepseek.com"
 
 
 def test_run_memory_ablation_v2_writes_expected_artifact(tmp_path):
@@ -112,6 +104,6 @@ def test_write_benchmark_core_report_marks_resume_safe_metrics(tmp_path):
 
     assert report_path.exists()
     assert "可以安全写进简历的指标" in report_text
-    assert "只适合放文档/面试展开的指标" in report_text
+    assert "更适合放文档或面试展开的指标" in report_text
     assert "resume_success_rate" in report_text
     assert "memory_hit_rate" in report_text

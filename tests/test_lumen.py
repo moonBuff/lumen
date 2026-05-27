@@ -10,6 +10,7 @@ import pytest
 import lumen as lumen_pkg
 from lumen import (
     AnthropicCompatibleModelClient,
+    DeepSeekModelClient,
     FakeModelClient,
     LumenAgent,
     OllamaModelClient,
@@ -52,19 +53,17 @@ def test_agent_runs_tool_then_final(tmp_path):
 
     assert answer == "Read the file successfully."
     assert any(item["role"] == "tool" and item["name"] == "read_file" for item in agent.session["transcript"])
-    assert "hello.txt" in agent.session["memory"]["files"]
+    assert "hello.txt" in agent.session["memory"]["working"]["recent_files"]
 
 
-def test_session_uses_transcript_without_history_alias(tmp_path):
+def test_session_uses_transcript(tmp_path):
     agent = build_agent(tmp_path, ["<final>Done.</final>"])
 
     assert "transcript" in agent.session
-    assert "history" not in agent.session
 
     assert agent.ask("Record this turn") == "Done."
 
     assert [item["role"] for item in agent.session["transcript"]] == ["user", "assistant"]
-    assert "history" not in agent.session
     assert agent.session["memory"]["working"]["task_summary"] == "Record this turn"
 
 
@@ -660,8 +659,8 @@ def test_anthropic_compatible_client_extracts_openai_style_message_content():
             ).encode("utf-8")
 
     client = AnthropicCompatibleModelClient(
-        model="deepseek-v4-flash",
-        base_url="https://api.deepseek.com/anthropic",
+        model="claude-sonnet-4-5-20250929",
+        base_url="https://www.right.codes/claude-aws/v1",
         api_key="sk-test",
         temperature=0.2,
         timeout=30,
@@ -687,8 +686,8 @@ def test_anthropic_compatible_client_reports_unrecognized_response_shape():
             return json.dumps({"content": [{"type": "thinking", "thinking": "hidden"}]}).encode("utf-8")
 
     client = AnthropicCompatibleModelClient(
-        model="deepseek-v4-flash",
-        base_url="https://api.deepseek.com/anthropic",
+        model="claude-sonnet-4-5-20250929",
+        base_url="https://www.right.codes/claude-aws/v1",
         api_key="sk-test",
         temperature=0.2,
         timeout=30,
@@ -696,6 +695,110 @@ def test_anthropic_compatible_client_reports_unrecognized_response_shape():
 
     with patch("urllib.request.urlopen", return_value=FakeResponse()):
         with pytest.raises(RuntimeError, match=r"content_types=\[thinking\]"):
+            client.complete("hello", 42)
+
+
+def test_deepseek_client_uses_chat_completions_and_extracts_message_content():
+    captured = {}
+
+    class FakeResponse:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "<final>ok</final>",
+                            }
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 4,
+                        "total_tokens": 14,
+                    },
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["headers"] = dict(request.headers)
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    client = DeepSeekModelClient(
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+        api_key="sk-test",
+        temperature=0.2,
+        timeout=30,
+    )
+
+    with patch("urllib.request.urlopen", fake_urlopen):
+        result = client.complete("hello", 42)
+
+    assert result == "<final>ok</final>"
+    assert captured["url"] == "https://api.deepseek.com/v1/chat/completions"
+    assert captured["timeout"] == 30
+    assert captured["headers"]["Authorization"] == "Bearer sk-test"
+    assert captured["headers"]["Content-type"] == "application/json"
+    assert captured["body"] == {
+        "model": "deepseek-v4-flash",
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 42,
+        "stream": False,
+        "temperature": 0.2,
+    }
+    assert client.last_completion_metadata["input_tokens"] == 10
+    assert client.last_completion_metadata["output_tokens"] == 4
+    assert client.last_completion_metadata["total_tokens"] == 14
+
+
+def test_deepseek_client_reports_reasoning_only_response_shape():
+    class FakeResponse:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "reasoning_content": "hidden",
+                                "content": "",
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    client = DeepSeekModelClient(
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+        api_key="sk-test",
+        temperature=0.2,
+        timeout=30,
+    )
+
+    with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with pytest.raises(RuntimeError, match=r"DeepSeek error: could not extract message content.*reasoning_content=True"):
             client.complete("hello", 42)
 
 
@@ -723,9 +826,9 @@ def test_build_agent_uses_openai_provider_and_model_override(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "OPENAI_API_BASE": "https://www.right.codes/codex/v1",
-            "OPENAI_API_KEY": "sk-test",
-            "OPENAI_MODEL": "env-model",
+            "LUMEN_OPENAI_API_BASE": "https://www.right.codes/codex/v1",
+            "LUMEN_OPENAI_API_KEY": "sk-test",
+            "LUMEN_OPENAI_MODEL": "env-model",
         },
         clear=False,
     ):
@@ -761,7 +864,7 @@ def test_build_arg_parser_accepts_deepseek_provider(tmp_path):
     assert args.provider == "deepseek"
 
 
-def test_build_agent_uses_anthropic_provider_and_openai_key_fallback(tmp_path):
+def test_build_agent_uses_anthropic_provider_and_lumen_key(tmp_path):
     args = type(
         "Args",
         (),
@@ -786,7 +889,7 @@ def test_build_agent_uses_anthropic_provider_and_openai_key_fallback(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "OPENAI_API_KEY": "sk-openai-fallback",
+            "LUMEN_ANTHROPIC_API_KEY": "sk-anthropic",
         },
         clear=True,
     ):
@@ -803,7 +906,7 @@ def test_build_agent_uses_anthropic_provider_and_openai_key_fallback(tmp_path):
     mock_anthropic.assert_called_once()
     assert mock_anthropic.call_args.kwargs["model"] == "claude-sonnet-4-5-20250929"
     assert mock_anthropic.call_args.kwargs["base_url"] == "https://www.right.codes/claude/v1"
-    assert mock_anthropic.call_args.kwargs["api_key"] == "sk-openai-fallback"
+    assert mock_anthropic.call_args.kwargs["api_key"] == "sk-anthropic"
     assert agent.model_client is fake_client
 
 
@@ -813,9 +916,8 @@ def test_build_agent_uses_anthropic_default_model_when_env_is_missing(tmp_path):
     with patch.dict(
         os.environ,
         {},
-        clear=False,
+        clear=True,
     ):
-        os.environ.pop("ANTHROPIC_MODEL", None)
         with patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
             lumen_pkg.build_agent(args)
 
@@ -826,7 +928,7 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
     (tmp_path / ".env").write_text(
         "\n".join(
             [
-                "LUMEN_DEEPSEEK_API_BASE=https://api.deepseek.com/anthropic",
+                "LUMEN_DEEPSEEK_API_BASE=https://api.deepseek.com",
                 "LUMEN_DEEPSEEK_API_KEY=sk-project-deepseek",
                 "LUMEN_DEEPSEEK_MODEL=deepseek-v4-pro",
             ]
@@ -857,13 +959,7 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
 
     with patch.dict(
         os.environ,
-        {
-            "DEEPSEEK_API_BASE": "https://legacy.deepseek.example/anthropic",
-            "DEEPSEEK_API_KEY": "sk-legacy-deepseek",
-            "DEEPSEEK_MODEL": "legacy-deepseek-model",
-            "ANTHROPIC_API_KEY": "sk-anthropic",
-            "OPENAI_API_KEY": "sk-openai",
-        },
+        {},
         clear=True,
     ):
         with patch(
@@ -872,26 +968,29 @@ def test_build_agent_uses_deepseek_provider_and_env_configuration(tmp_path):
         ), patch(
             "lumen.cli.OpenAICompatibleModelClient",
             side_effect=AssertionError("openai client should not be used"),
-        ), patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
-            fake_client = mock_anthropic.return_value
+        ), patch(
+            "lumen.cli.AnthropicCompatibleModelClient",
+            side_effect=AssertionError("anthropic client should not be used"),
+        ), patch("lumen.cli.DeepSeekModelClient") as mock_deepseek:
+            fake_client = mock_deepseek.return_value
             agent = lumen_pkg.build_agent(args)
 
-    mock_anthropic.assert_called_once()
-    assert mock_anthropic.call_args.kwargs["model"] == "deepseek-v4-pro"
-    assert mock_anthropic.call_args.kwargs["base_url"] == "https://api.deepseek.com/anthropic"
-    assert mock_anthropic.call_args.kwargs["api_key"] == "sk-project-deepseek"
+    mock_deepseek.assert_called_once()
+    assert mock_deepseek.call_args.kwargs["model"] == "deepseek-v4-pro"
+    assert mock_deepseek.call_args.kwargs["base_url"] == "https://api.deepseek.com"
+    assert mock_deepseek.call_args.kwargs["api_key"] == "sk-project-deepseek"
     assert agent.model_client is fake_client
 
 
 def test_build_agent_uses_deepseek_default_model_when_env_is_missing(tmp_path):
     args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
 
-    with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-deepseek"}, clear=True):
-        with patch("lumen.cli.AnthropicCompatibleModelClient") as mock_anthropic:
+    with patch.dict(os.environ, {}, clear=True):
+        with patch("lumen.cli.DeepSeekModelClient") as mock_deepseek:
             lumen_pkg.build_agent(args)
 
-    assert mock_anthropic.call_args.kwargs["model"] == "deepseek-v4-pro"
-    assert mock_anthropic.call_args.kwargs["base_url"] == "https://api.deepseek.com/anthropic"
+    assert mock_deepseek.call_args.kwargs["model"] == "deepseek-v4-pro"
+    assert mock_deepseek.call_args.kwargs["base_url"] == "https://api.deepseek.com"
 
 
 def test_build_agent_uses_openai_provider_by_default(tmp_path):
@@ -900,8 +999,8 @@ def test_build_agent_uses_openai_provider_by_default(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "OPENAI_API_BASE": "https://www.right.codes/codex/v1",
-            "OPENAI_API_KEY": "sk-test",
+            "LUMEN_OPENAI_API_BASE": "https://www.right.codes/codex/v1",
+            "LUMEN_OPENAI_API_KEY": "sk-test",
         },
         clear=False,
     ):
@@ -960,7 +1059,7 @@ def test_successful_run_persists_run_artifacts_and_stop_reason(tmp_path):
 def test_trace_and_report_redact_secret_env_values(tmp_path):
     secret = "sk-test-secret-123"
     command = subprocess.list2cmdline([sys.executable, "-c", f"print({secret!r}, end='')"])
-    with patch.dict(os.environ, {"OPENAI_API_KEY": secret}, clear=False):
+    with patch.dict(os.environ, {"LUMEN_OPENAI_API_KEY": secret}, clear=False):
         agent = build_agent(
             tmp_path,
             [
@@ -986,7 +1085,7 @@ def test_trace_and_report_redact_secret_env_values(tmp_path):
     prompt_events = [event for event in trace_events if event["event"] == "prompt_built"]
     assert prompt_events
     assert prompt_events[0]["prompt_metadata"]["secret_env_count"] >= 1
-    assert "OPENAI_API_KEY" in prompt_events[0]["prompt_metadata"]["secret_env_names"]
+    assert "LUMEN_OPENAI_API_KEY" in prompt_events[0]["prompt_metadata"]["secret_env_names"]
 
     tool_events = [event for event in trace_events if event["event"] == "tool_executed"]
     assert tool_events
@@ -1282,7 +1381,7 @@ def test_resume_marks_schema_mismatch_when_checkpoint_version_is_incompatible(tm
             "ckpt_schema": {
                 "checkpoint_id": "ckpt_schema",
                 "parent_checkpoint_id": "",
-                "schema_version": "legacy-v0",
+                "schema_version": "incompatible-v0",
                 "created_at": "2026-04-14T09:00:00+00:00",
                 "current_goal": "Continue after schema change",
                 "completed": [],

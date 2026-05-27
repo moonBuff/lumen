@@ -12,21 +12,15 @@ import sys
 import textwrap
 
 from .config import load_project_env, provider_env
-from .models import AnthropicCompatibleModelClient, OllamaModelClient, OpenAICompatibleModelClient
+from .models import AnthropicCompatibleModelClient, DeepSeekModelClient, OllamaModelClient, OpenAICompatibleModelClient
 from .runtime import Lumen, SessionStore
 from .workspace import WorkspaceContext, middle
 
 DEFAULT_SECRET_ENV_NAMES = (
     "LUMEN_OPENAI_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENAI_API_TOKEN",
     "LUMEN_ANTHROPIC_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
     "LUMEN_DEEPSEEK_API_KEY",
-    "DEEPSEEK_API_KEY",
     "LUMEN_RIGHT_CODES_API_KEY",
-    "RIGHT_CODES_API_KEY",
     "GITHUB_PAT",
     "GH_PAT",
 )
@@ -62,7 +56,7 @@ DEFAULT_OPENAI_BASE_URL = "https://www.right.codes/codex/v1"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 DEFAULT_ANTHROPIC_BASE_URL = "https://www.right.codes/claude/v1"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro"
-DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic"
+DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 SECRET_ENV_NAMES_VAR = "LUMEN_SECRET_ENV_NAMES"
 
 
@@ -75,17 +69,17 @@ def _effective_model(args, provider):
     if explicit_model:
         return explicit_model
     if provider == "openai":
-        model = provider_env("LUMEN_OPENAI_MODEL", ("OPENAI_MODEL",))
+        model = provider_env("LUMEN_OPENAI_MODEL")
         if model:
             return model
         return DEFAULT_OPENAI_MODEL
     if provider == "anthropic":
-        model = provider_env("LUMEN_ANTHROPIC_MODEL", ("ANTHROPIC_MODEL",))
+        model = provider_env("LUMEN_ANTHROPIC_MODEL")
         if model:
             return model
         return DEFAULT_ANTHROPIC_MODEL
     if provider == "deepseek":
-        model = provider_env("LUMEN_DEEPSEEK_MODEL", ("DEEPSEEK_MODEL",))
+        model = provider_env("LUMEN_DEEPSEEK_MODEL")
         if model:
             return model
         return DEFAULT_DEEPSEEK_MODEL
@@ -111,8 +105,8 @@ def _build_model_client(args):
     # 真正的提示词格式、缓存支持、HTTP 协议差异，都封装在 models.py 里。
     if provider == "openai":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_OPENAI_API_BASE", ("OPENAI_API_BASE",), DEFAULT_OPENAI_BASE_URL)
-        api_key = provider_env("LUMEN_OPENAI_API_KEY", ("OPENAI_API_KEY",))
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_OPENAI_API_BASE", DEFAULT_OPENAI_BASE_URL)
+        api_key = provider_env("LUMEN_OPENAI_API_KEY")
         return OpenAICompatibleModelClient(
             model=model,
             base_url=base_url,
@@ -122,11 +116,8 @@ def _build_model_client(args):
         )
     if provider == "anthropic":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_ANTHROPIC_API_BASE", ("ANTHROPIC_API_BASE",), DEFAULT_ANTHROPIC_BASE_URL)
-        api_key = provider_env(
-            "LUMEN_ANTHROPIC_API_KEY",
-            ("ANTHROPIC_API_KEY", "LUMEN_RIGHT_CODES_API_KEY", "RIGHT_CODES_API_KEY", "LUMEN_OPENAI_API_KEY", "OPENAI_API_KEY"),
-        )
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_ANTHROPIC_API_BASE", DEFAULT_ANTHROPIC_BASE_URL)
+        api_key = provider_env("LUMEN_ANTHROPIC_API_KEY")
         return AnthropicCompatibleModelClient(
             model=model,
             base_url=base_url,
@@ -136,9 +127,9 @@ def _build_model_client(args):
         )
     if provider == "deepseek":
         model = _effective_model(args, provider)
-        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_DEEPSEEK_API_BASE", ("DEEPSEEK_API_BASE",), DEFAULT_DEEPSEEK_BASE_URL)
-        api_key = provider_env("LUMEN_DEEPSEEK_API_KEY", ("DEEPSEEK_API_KEY",))
-        return AnthropicCompatibleModelClient(
+        base_url = getattr(args, "base_url", None) or provider_env("LUMEN_DEEPSEEK_API_BASE", DEFAULT_DEEPSEEK_BASE_URL)
+        api_key = provider_env("LUMEN_DEEPSEEK_API_KEY")
+        return DeepSeekModelClient(
             model=model,
             base_url=base_url,
             api_key=api_key,

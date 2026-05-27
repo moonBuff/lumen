@@ -16,7 +16,8 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Transcript/session cleanup | Completed |
 | Evaluation artifact terminology | Completed |
 | Context architecture refactor | In progress |
-| Full test status | `106 passed, 1 skipped, 6 warnings` after Phase 6 |
+| DeepSeek provider client | Completed |
+| Focused test status | `63 passed`; `11 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 8 |
 
 ## Phase Tracker
 
@@ -29,7 +30,12 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 4 | Explicit Context Blocks | Completed | Stable prompt context is split into explicit blocks and checkpoint context is a separate section. |
 | 5 | Transcript, Memory, and Session Cleanup | Completed | Session conversation state now uses `transcript`; memory remains a separate distilled store. |
 | 6 | Evaluation and Artifact Terminology Cleanup | Completed | Reports and benchmark rows now expose model-context sections and context-block order. |
-| 7 | Portfolio Polish | Not started | Pending. |
+| 7 | Compatibility Cleanup | Completed | Runtime and memory code now use only the current session, memory, and provider configuration schema. |
+| 8 | DeepSeek Provider Client | Completed | DeepSeek now uses a dedicated chat-completions client instead of the Anthropic-compatible adapter. |
+| 9 | Durable Memory Promotion | Not started | Planned next. |
+| 10 | Run Failure Finalization | Not started | Planned after durable memory. |
+| 11 | Controlled File Deletion Tool | Not started | Planned after run failure handling. |
+| 12 | Tool Budget and Limit Strategy | Not started | Planned after tool surface cleanup. |
 
 ## Progress Entries
 
@@ -83,7 +89,7 @@ Risks / follow-ups:
 Scope:
 
 - Switched the Python package, CLI entry point, module entry point, runtime class names, tests, scripts, benchmark text, docs, environment variable prefix, and runtime artifact path to Lumen terminology.
-- Changed local runtime artifacts from `.pico/` to `.lumen/`.
+- Changed local runtime artifacts to `.lumen/`.
 - Updated README examples and provider configuration names to `LUMEN_*`.
 - Renamed screenshot assets referenced by README.
 - Included `uv.lock` in version control scope for repeatable `uv` installs.
@@ -292,6 +298,74 @@ Risks / follow-ups:
 
 - Phase 7 should polish README and portfolio-facing documentation, then run a fresh clone style verification.
 - `prefix_*` cache metadata remains in reports for continuity; context-block metadata is now also available for architecture review.
+
+### 2026-05-23: Phase 7 Completed
+
+Scope:
+
+- Removed old memory alias fields from the runtime memory schema.
+- Removed session `history` migration logic from runtime startup.
+- Removed provider environment variable fallback paths; provider configuration now uses `LUMEN_*` names only.
+- Updated delegate memory initialization to use the current `LayeredMemory` API.
+- Updated tests and local architecture notes to match the current schema.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `docs/architecture/lumen-architecture-interview-guide.zh.md`
+- `docs/architecture/lumen-current-architecture-implementation.zh.md`
+- `lumen/cli.py`
+- `lumen/config.py`
+- `lumen/memory.py`
+- `lumen/metrics.py`
+- `lumen/runtime.py`
+- `lumen/tools.py`
+- `tests/test_lumen.py`
+- `tests/test_memory.py`
+- `tests/test_metrics.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_memory.py tests/test_lumen.py tests/test_metrics.py tests/test_safety_invariants.py -q` -> `82 passed, 1 skipped, 6 warnings`.
+- `uv run python -m ruff check lumen tests scripts pyproject.toml` -> all checks passed.
+
+Risks / follow-ups:
+
+- Existing local sessions that still contain removed fields should be discarded or reset.
+- Users should configure providers through `LUMEN_*` environment variables or `.env` entries.
+
+### 2026-05-27: Phase 8 Completed
+
+Scope:
+
+- Added a dedicated `DeepSeekModelClient` using the chat-completions endpoint.
+- Routed CLI `--provider deepseek` and provider metrics experiments through the new DeepSeek client.
+- Updated DeepSeek defaults to use the native API base URL.
+- Added response-shape diagnostics for reasoning-only responses without message content.
+- Updated provider tests so DeepSeek no longer depends on the Anthropic-compatible adapter.
+
+Changed files:
+
+- `.env.example`
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/__init__.py`
+- `lumen/cli.py`
+- `lumen/metrics.py`
+- `lumen/models.py`
+- `tests/test_lumen.py`
+- `tests/test_metrics.py`
+- `tests/test_safety_invariants.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_lumen.py -q` -> `63 passed`.
+- `uv run python -m pytest tests/test_safety_invariants.py -q` -> `11 passed, 1 skipped`.
+- `uv run python -m pytest tests/test_metrics.py -q` -> `5 passed, 6 warnings`.
+
+Risks / follow-ups:
+
+- DeepSeek reasoning-only responses now fail with a clearer provider-specific error; Phase 10 should ensure such model errors always finalize the run artifact cleanly.
+- Local `.env` files using the old DeepSeek Anthropic-compatible base URL should be updated to the native DeepSeek API base.
 
 ## Update Template
 

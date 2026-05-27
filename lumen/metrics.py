@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import load_project_env, provider_env
 from .evaluator import run_fixed_benchmark
-from .models import AnthropicCompatibleModelClient, FakeModelClient, OpenAICompatibleModelClient
+from .models import AnthropicCompatibleModelClient, DeepSeekModelClient, FakeModelClient, OpenAICompatibleModelClient
 from .runtime import Lumen, SessionStore
 from .workspace import WorkspaceContext
 
@@ -680,38 +680,35 @@ def _provider_summary_from_artifact(payload):
 def _provider_profile(provider):
     load_project_env(Path.cwd())
     if provider == "gpt":
-        api_key = provider_env("LUMEN_OPENAI_API_KEY", ("OPENAI_API_KEY",))
+        api_key = provider_env("LUMEN_OPENAI_API_KEY")
         if not api_key:
-            return {"provider": provider, "status": "blocked", "reason": "LUMEN_OPENAI_API_KEY or OPENAI_API_KEY missing"}
+            return {"provider": provider, "status": "blocked", "reason": "LUMEN_OPENAI_API_KEY missing"}
         return {
             "provider": provider,
             "status": "ready",
-            "model": provider_env("LUMEN_OPENAI_MODEL", ("OPENAI_MODEL",), "gpt-5.4"),
-            "base_url": provider_env("LUMEN_OPENAI_API_BASE", ("OPENAI_API_BASE",), "https://api.openai.com/v1"),
+            "model": provider_env("LUMEN_OPENAI_MODEL", "gpt-5.4"),
+            "base_url": provider_env("LUMEN_OPENAI_API_BASE", "https://api.openai.com/v1"),
             "api_key": api_key,
         }
     if provider == "deepseek":
-        api_key = provider_env("LUMEN_DEEPSEEK_API_KEY", ("DEEPSEEK_API_KEY",))
+        api_key = provider_env("LUMEN_DEEPSEEK_API_KEY")
         if not api_key:
-            return {"provider": provider, "status": "blocked", "reason": "LUMEN_DEEPSEEK_API_KEY or DEEPSEEK_API_KEY missing"}
+            return {"provider": provider, "status": "blocked", "reason": "LUMEN_DEEPSEEK_API_KEY missing"}
         return {
             "provider": provider,
             "status": "ready",
-            "model": provider_env("LUMEN_DEEPSEEK_MODEL", ("DEEPSEEK_MODEL",), "deepseek-v4-pro"),
-            "base_url": provider_env("LUMEN_DEEPSEEK_API_BASE", ("DEEPSEEK_API_BASE",), "https://api.deepseek.com/anthropic"),
+            "model": provider_env("LUMEN_DEEPSEEK_MODEL", "deepseek-v4-pro"),
+            "base_url": provider_env("LUMEN_DEEPSEEK_API_BASE", "https://api.deepseek.com"),
             "api_key": api_key,
         }
-    api_key = provider_env(
-        "LUMEN_ANTHROPIC_API_KEY",
-        ("ANTHROPIC_API_KEY", "LUMEN_RIGHT_CODES_API_KEY", "RIGHT_CODES_API_KEY", "LUMEN_OPENAI_API_KEY", "OPENAI_API_KEY"),
-    )
+    api_key = provider_env("LUMEN_ANTHROPIC_API_KEY")
     if not api_key:
-        return {"provider": "claude", "status": "blocked", "reason": "LUMEN_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY missing"}
+        return {"provider": "claude", "status": "blocked", "reason": "LUMEN_ANTHROPIC_API_KEY missing"}
     return {
         "provider": "claude",
         "status": "ready",
-        "model": provider_env("LUMEN_ANTHROPIC_MODEL", ("ANTHROPIC_MODEL",), "claude-sonnet-4-6"),
-        "base_url": provider_env("LUMEN_ANTHROPIC_API_BASE", ("ANTHROPIC_API_BASE",), "https://www.right.codes/claude/v1"),
+        "model": provider_env("LUMEN_ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        "base_url": provider_env("LUMEN_ANTHROPIC_API_BASE", "https://www.right.codes/claude/v1"),
         "api_key": api_key,
     }
 
@@ -723,6 +720,14 @@ def _make_provider_client(provider):
     timeout = 60
     if provider == "gpt":
         return OpenAICompatibleModelClient(
+            model=profile["model"],
+            base_url=profile["base_url"],
+            api_key=profile["api_key"],
+            temperature=0.0,
+            timeout=timeout,
+        )
+    if provider == "deepseek":
+        return DeepSeekModelClient(
             model=profile["model"],
             base_url=profile["base_url"],
             api_key=profile["api_key"],
@@ -759,6 +764,16 @@ def run_provider_experiments(benchmark_path, workspace_root, artifact_root, max_
             def factory(task, workspace, profile=profile):
                 del task, workspace
                 return OpenAICompatibleModelClient(
+                    model=profile["model"],
+                    base_url=profile["base_url"],
+                    api_key=profile["api_key"],
+                    temperature=0.0,
+                    timeout=300,
+                )
+        elif provider_name == "deepseek":
+            def factory(task, workspace, profile=profile):
+                del task, workspace
+                return DeepSeekModelClient(
                     model=profile["model"],
                     base_url=profile["base_url"],
                     api_key=profile["api_key"],
@@ -1465,7 +1480,7 @@ def _apply_recovery_setup(agent, task, workspace_root):
                 "ckpt_schema": {
                     "checkpoint_id": "ckpt_schema",
                     "parent_checkpoint_id": "",
-                    "schema_version": "legacy-v0",
+                    "schema_version": "incompatible-v0",
                     "created_at": "2026-04-15T08:00:00+00:00",
                     "current_goal": "Recover after schema mismatch",
                     "completed": [],
@@ -1628,7 +1643,7 @@ def write_benchmark_core_report(
     lines = [
         "# Lumen Benchmark Core Report",
         "",
-        "这轮 benchmark 只收缩到 Harness regression、context ablation、working memory ablation 和 recovery ablation 四层，不把 provider、run aggregation 或 durable memory 的别的结论揉进来。",
+        "这轮 benchmark 只收缩到 Harness regression、context ablation、working memory ablation 和 recovery ablation 四层，不把 provider、run aggregation 或 durable memory 的其他结论混进来。",
         "",
         "## Harness Regression",
         f"- 固定 regression 任务数：{harness['summary']['total_tasks']}",
@@ -1669,7 +1684,7 @@ def write_benchmark_core_report(
         "- workspace_drift_detection_rate",
         "- resume_false_accept_rate",
         "",
-        "## 只适合放文档/面试展开的指标",
+        "## 更适合放文档或面试展开的指标",
         "- current_request_preserved_rate",
         "- memory_hit_rate",
         "- stale_reanchor_rate",

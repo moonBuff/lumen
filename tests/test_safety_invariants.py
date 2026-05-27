@@ -121,7 +121,7 @@ def test_cli_build_agent_loads_project_env_secrets_before_redaction_setup(tmp_pa
 
     (tmp_path / "README.md").write_text("demo\n", encoding="utf-8")
     (tmp_path / ".env").write_text("LUMEN_DEEPSEEK_API_KEY=sk-project-secret\n", encoding="utf-8")
-    with patch.dict(os.environ, {}, clear=True), patch("lumen.cli.AnthropicCompatibleModelClient", DummyModelClient):
+    with patch.dict(os.environ, {}, clear=True), patch("lumen.cli.DeepSeekModelClient", DummyModelClient):
         args = lumen_cli.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "deepseek"])
         agent = lumen_cli.build_agent(args)
         assert agent.secret_env_summary()["secret_env_names"] == ["LUMEN_DEEPSEEK_API_KEY"]
