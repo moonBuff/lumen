@@ -17,7 +17,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | Evaluation artifact terminology | Completed |
 | Context architecture refactor | In progress |
 | DeepSeek provider client | Completed |
-| Focused test status | `66 passed`; `16 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 9 |
+| Focused test status | `67 passed`; `29 passed, 1 skipped`; `5 passed, 6 warnings` after Phase 10 |
 
 ## Phase Tracker
 
@@ -33,7 +33,7 @@ This log tracks the architecture cleanup and project identity work. Update it af
 | 7 | Compatibility Cleanup | Completed | Runtime and memory code now use only the current session, memory, and provider configuration schema. |
 | 8 | DeepSeek Provider Client | Completed | DeepSeek now uses a dedicated chat-completions client instead of the Anthropic-compatible adapter. |
 | 9 | Durable Memory Promotion | Completed | Explicit user memory requests now create durable-memory candidates before final-answer label parsing. |
-| 10 | Run Failure Finalization | Not started | Planned after durable memory. |
+| 10 | Run Failure Finalization | Completed | Model errors now finalize failed task state, trace, checkpoint, and report artifacts. |
 | 11 | Controlled File Deletion Tool | Not started | Planned after run failure handling. |
 | 12 | Tool Budget and Limit Strategy | Not started | Planned after tool surface cleanup. |
 
@@ -394,6 +394,34 @@ Risks / follow-ups:
 
 - Topic inference remains intentionally lightweight and rule-based; it is enough for explicit user preferences and stable facts, but not a full semantic memory classifier.
 - Phase 10 should make model/runtime exceptions finalize run artifacts cleanly instead of leaving incomplete runs.
+
+### 2026-05-27: Phase 10 Completed
+
+Scope:
+
+- Added failed-run finalization for model backend errors raised during `ask()`.
+- Failed model calls now write `task_state.json`, `trace.jsonl`, `report.json`, and a checkpoint reference.
+- Added a `run_failed` trace event with status, stop reason, error type, redacted error text, and run duration.
+- Kept CLI-facing behavior unchanged by re-raising the model error after artifacts are finalized.
+- Added regression coverage to ensure secret-shaped error text is redacted from report and trace artifacts.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/runtime.py`
+- `tests/test_lumen.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_lumen.py -q` -> `67 passed`.
+- `uv run python -m pytest tests/test_task_state.py tests/test_run_store.py tests/test_safety_invariants.py tests/test_evaluator.py -q` -> `29 passed, 1 skipped`.
+- `uv run python -m pytest tests/test_metrics.py -q` -> `5 passed, 6 warnings`.
+- `uv run python -m ruff check lumen tests` -> all checks passed.
+
+Risks / follow-ups:
+
+- This phase handles model-client `RuntimeError` paths. Broader runtime exception classification can be expanded later if needed.
+- Phase 11 should add a controlled file deletion tool so the model does not need to use shell commands for simple file removal.
 
 ## Update Template
 

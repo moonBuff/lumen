@@ -39,6 +39,19 @@ def build_agent(tmp_path, outputs, **kwargs):
     )
 
 
+class ExplodingModelClient:
+    supports_prompt_cache = False
+
+    def __init__(self, message):
+        self.model = "exploding-model"
+        self.message = message
+        self.last_completion_metadata = {}
+
+    def complete(self, prompt, max_new_tokens, **kwargs):
+        del prompt, max_new_tokens, kwargs
+        raise RuntimeError(self.message)
+
+
 def test_agent_runs_tool_then_final(tmp_path):
     (tmp_path / "hello.txt").write_text("alpha\nbeta\n", encoding="utf-8")
     agent = build_agent(
@@ -1091,6 +1104,46 @@ def test_trace_and_report_redact_secret_env_values(tmp_path):
     assert tool_events
     assert "<redacted>" in tool_events[0]["args"]["command"]
     assert "<redacted>" in tool_events[0]["result"]
+
+
+def test_model_error_finalizes_run_artifacts_and_redacts_report(tmp_path):
+    secret = "sk-test-secret-123"
+    workspace = build_workspace(tmp_path)
+    store = SessionStore(tmp_path / ".lumen" / "sessions")
+    agent = LumenAgent(
+        model_client=ExplodingModelClient(f"backend rejected token {secret}"),
+        workspace=workspace,
+        session_store=store,
+        approval_policy="auto",
+        secret_env_names={"LUMEN_OPENAI_API_KEY"},
+    )
+
+    with patch.dict(os.environ, {"LUMEN_OPENAI_API_KEY": secret}, clear=False):
+        with pytest.raises(RuntimeError, match="backend rejected token"):
+            agent.ask("Trigger a model error")
+
+    task_state = json.loads(agent.run_store.task_state_path(agent.current_task_state).read_text(encoding="utf-8"))
+    report_text = agent.run_store.report_path(agent.current_task_state).read_text(encoding="utf-8")
+    report = json.loads(report_text)
+    trace_events = [
+        json.loads(line)
+        for line in agent.run_store.trace_path(agent.current_task_state).read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert task_state["status"] == "failed"
+    assert task_state["stop_reason"] == "model_error"
+    assert report["status"] == "failed"
+    assert report["stop_reason"] == "model_error"
+    assert report["task_state"]["status"] == "failed"
+    assert secret not in report_text
+    assert "<redacted>" in report_text
+
+    assert trace_events[-1]["event"] == "run_failed"
+    assert trace_events[-1]["status"] == "failed"
+    assert trace_events[-1]["stop_reason"] == "model_error"
+    assert trace_events[-1]["error_type"] == "RuntimeError"
+    assert trace_events[-1]["error"] == "backend rejected token <redacted>"
+    assert any(event["event"] == "checkpoint_created" for event in trace_events)
 
 
 def test_prompt_budget_metadata_records_budget_decisions(tmp_path):

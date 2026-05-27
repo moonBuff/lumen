@@ -18,7 +18,7 @@ from pathlib import Path
 from . import memory as memorylib
 from .context_manager import ContextManager
 from .run_store import RunStore
-from .task_state import TaskState
+from .task_state import STOP_REASON_MODEL_ERROR, TaskState
 from . import tools as toolkit
 from .workspace import IGNORED_PATH_NAMES, MAX_HISTORY, WorkspaceContext, clip, now
 
@@ -864,6 +864,37 @@ class Lumen:
         self.last_durable_superseded = superseded
         return promoted, rejections, superseded
 
+    def finalize_failed_run(self, task_state, user_message, run_started_at, exc, stop_reason=STOP_REASON_MODEL_ERROR):
+        error_text = f"{stop_reason}: {exc}"
+        if stop_reason == STOP_REASON_MODEL_ERROR:
+            task_state.stop_model_error(error_text)
+        else:
+            task_state.stop(stop_reason, status="failed", final_answer=error_text)
+        self.record({"role": "assistant", "content": error_text, "created_at": now()})
+        self.run_store.write_task_state(task_state)
+        checkpoint = self.create_checkpoint(task_state, user_message, trigger=stop_reason)
+        self.run_store.write_task_state(task_state)
+        self.emit_trace(
+            task_state,
+            "checkpoint_created",
+            {
+                "checkpoint_id": checkpoint["checkpoint_id"],
+                "trigger": stop_reason,
+            },
+        )
+        self.emit_trace(
+            task_state,
+            "run_failed",
+            {
+                "status": task_state.status,
+                "stop_reason": task_state.stop_reason,
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+                "run_duration_ms": int((time.monotonic() - run_started_at) * 1000),
+            },
+        )
+        self.run_store.write_report(task_state, self.redact_artifact(self.build_report(task_state)))
+
     def ask(self, user_message):
         """执行一次完整的 agent 回合，直到产出最终答案或命中停止条件。
 
@@ -981,12 +1012,16 @@ class Lumen:
                 prompt_cache_key = prompt_metadata.get("prompt_cache_key")
                 prompt_cache_retention = "in_memory"
             model_started_at = time.monotonic()
-            raw = self.model_client.complete(
-                prompt,
-                self.max_new_tokens,
-                prompt_cache_key=prompt_cache_key,
-                prompt_cache_retention=prompt_cache_retention,
-            )
+            try:
+                raw = self.model_client.complete(
+                    prompt,
+                    self.max_new_tokens,
+                    prompt_cache_key=prompt_cache_key,
+                    prompt_cache_retention=prompt_cache_retention,
+                )
+            except RuntimeError as exc:
+                self.finalize_failed_run(task_state, user_message, run_started_at, exc)
+                raise
             completion_metadata = dict(getattr(self.model_client, "last_completion_metadata", {}) or {})
             if completion_metadata:
                 # 把后端返回的 usage/cache 统计并回 prompt_metadata，
