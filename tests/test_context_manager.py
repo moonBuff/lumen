@@ -1,5 +1,6 @@
 from lumen import FakeModelClient, LumenAgent, ModelContext, SessionStore, WorkspaceContext
 from lumen.context_manager import ContextManager
+from lumen.task_state import TaskState
 
 
 def build_workspace(tmp_path):
@@ -74,6 +75,29 @@ def test_context_manager_builds_structured_model_context_before_rendering(tmp_pa
     assert metadata["model_context"]["sections"]["current_request"]["rendered_chars"] == len(
         "Current user request:\nExplain the workspace."
     )
+
+
+def test_context_manager_adds_tool_budget_guidance_near_limit(tmp_path):
+    agent = build_agent(tmp_path, [], max_steps=2)
+    agent.current_task_state = TaskState.create(
+        run_id="run-budget",
+        task_id="task-budget",
+        user_request="Inspect the project.",
+    )
+    agent.current_task_state.tool_steps = 1
+
+    prompt, metadata = ContextManager(agent).build("Summarize the project.")
+
+    assert "Tool budget:" in prompt
+    assert "Remaining tool calls: 1 of 2." in prompt
+    assert "Prefer a final answer now" in prompt
+    assert metadata["tool_budget"] == {
+        "max_steps": 2,
+        "used_tool_steps": 1,
+        "remaining_tool_steps": 1,
+        "near_limit": True,
+    }
+    assert metadata["current_request"]["text"] == "Summarize the project."
 
 
 def test_context_manager_reduces_relevant_memory_before_transcript_and_preserves_newer_context(tmp_path):

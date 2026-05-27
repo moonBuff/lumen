@@ -113,8 +113,8 @@ class Lumen:
         session=None,
         run_store=None,
         approval_policy="ask",
-        max_steps=6,
-        max_new_tokens=512,
+        max_steps=8,
+        max_new_tokens=1024,
         depth=0,
         max_depth=1,
         read_only=False,
@@ -391,6 +391,7 @@ class Lumen:
               <final>your answer</final>
             - Never invent tool results.
             - Keep answers concise and concrete.
+            - Search first, then read the smallest relevant file ranges. When the tool budget is nearly exhausted, return the best final answer from known evidence unless one more tool call is essential.
             - If the user asks you to create, update, or delete a specific file and the path is clear, use write_file, patch_file, or delete_file instead of repeatedly listing files.
             - Before writing tests for existing code, read the implementation first.
             - When writing tests, match the current implementation unless the user explicitly asked you to change the code.

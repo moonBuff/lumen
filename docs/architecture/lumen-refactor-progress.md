@@ -453,6 +453,38 @@ Risks / follow-ups:
 - `delete_file` intentionally deletes only regular files, not directories.
 - Phase 12 should tune tool budget and prompt strategy to reduce avoidable step-limit stops on larger code-reading tasks.
 
+### 2026-05-27: Phase 12 Completed
+
+Scope:
+
+- Raised the default interactive step budget from 6 to 8.
+- Raised the default per-step model output budget from 512 to 1024 tokens.
+- Added `tool_budget` prompt metadata so traces/reports can explain how many tool calls were used and how many remain.
+- Added near-limit current-request guidance when only one or zero tool calls remain, nudging the model to finalize from known evidence unless one more tool call is essential.
+- Updated the memory metrics experiment fact that refers to the default step budget.
+- Added regression coverage for CLI defaults and near-limit prompt guidance.
+
+Changed files:
+
+- `docs/architecture/lumen-refactor-progress.md`
+- `lumen/cli.py`
+- `lumen/context_manager.py`
+- `lumen/metrics.py`
+- `lumen/runtime.py`
+- `tests/test_context_manager.py`
+- `tests/test_lumen.py`
+
+Validation:
+
+- `uv run python -m pytest tests/test_context_manager.py tests/test_lumen.py -q` -> `78 passed`.
+- `uv run python -m pytest tests/test_evaluator.py tests/test_metrics.py -q` -> `13 passed, 6 warnings`.
+- `uv run python -m ruff check lumen tests` -> all checks passed.
+
+Risks / follow-ups:
+
+- The larger default budget may slightly increase token usage on real providers, but should reduce premature stop-limit failures.
+- The existing metrics warning still comes from `datetime.utcnow()` and can be cleaned in a future maintenance pass.
+
 ## Update Template
 
 Use this template after each phase:

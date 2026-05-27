@@ -92,6 +92,31 @@ class ContextManager:
         metadata = self.prompt_metadata(model_context, prompt)
         return prompt, metadata
 
+    def _tool_budget(self):
+        max_steps = int(getattr(self.agent, "max_steps", 0) or 0)
+        task_state = getattr(self.agent, "current_task_state", None)
+        used_steps = int(getattr(task_state, "tool_steps", 0) or 0) if task_state is not None else 0
+        remaining_steps = max(max_steps - used_steps, 0) if max_steps else 0
+        near_limit = bool(task_state is not None and max_steps and remaining_steps <= 1)
+        return {
+            "max_steps": max_steps,
+            "used_tool_steps": used_steps,
+            "remaining_tool_steps": remaining_steps,
+            "near_limit": near_limit,
+        }
+
+    def _current_request_text(self, user_message):
+        text = f"Current user request:\n{user_message}"
+        tool_budget = self._tool_budget()
+        if not tool_budget["near_limit"]:
+            return text
+        return (
+            f"{text}\n\n"
+            "Tool budget:\n"
+            f"- Remaining tool calls: {tool_budget['remaining_tool_steps']} of {tool_budget['max_steps']}.\n"
+            "- Prefer a final answer now unless one more tool call is essential."
+        )
+
     def build_model_context(self, user_message):
         user_message = str(user_message)
         self.section_floors = self._compute_section_floors()
@@ -107,7 +132,7 @@ class ContextManager:
             CHECKPOINT_CONTEXT_SECTION: self._checkpoint_context_text(),
             "memory": "Memory:\n- disabled" if not memory_enabled else str(self.agent.memory_text()),
             "transcript": "",
-            CURRENT_REQUEST_SECTION: f"Current user request:\n{user_message}",
+            CURRENT_REQUEST_SECTION: self._current_request_text(user_message),
         }
         selected_notes = []
         if memory_enabled and relevant_memory_enabled and hasattr(self.agent, "memory") and hasattr(self.agent.memory, "retrieval_candidates"):
@@ -548,4 +573,5 @@ class ContextManager:
                 "rendered_chars": len(user_message),
                 "section_chars": len(rendered[CURRENT_REQUEST_SECTION].rendered),
             },
+            "tool_budget": self._tool_budget(),
         }

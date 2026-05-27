@@ -865,6 +865,13 @@ def test_build_arg_parser_defaults_provider_to_openai(tmp_path):
     assert args.provider == "openai"
 
 
+def test_build_arg_parser_uses_interactive_model_budgets(tmp_path):
+    args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path)])
+
+    assert args.max_steps == 8
+    assert args.max_new_tokens == 1024
+
+
 def test_build_arg_parser_accepts_anthropic_provider(tmp_path):
     args = lumen_pkg.build_arg_parser().parse_args(["--cwd", str(tmp_path), "--provider", "anthropic"])
 
