@@ -39,6 +39,25 @@ DURABLE_TOPIC_DEFAULTS = {
     },
 }
 
+DURABLE_TOPIC_QUERY_HINTS = {
+    "user-preferences": (
+        "preference",
+        "preferences",
+        "prefer",
+        "style",
+        "remember",
+        "memory",
+        "偏好",
+        "风格",
+        "记得",
+        "记住",
+        "记忆",
+    ),
+    "project-conventions": ("convention", "conventions", "rule", "rules", "约定", "规范", "规则"),
+    "key-decisions": ("decision", "decisions", "rationale", "决定", "决策", "原因"),
+    "dependency-facts": ("dependency", "dependencies", "environment", "依赖", "环境"),
+}
+
 
 def default_memory_state():
     # 用一个小而结构化的状态，而不是一大段自由文本摘要。
@@ -140,18 +159,23 @@ class DurableMemoryStore:
 
     def retrieval_candidates(self, query, limit=3):
         query_tokens = _tokenize(query)
+        query_text = str(query).lower()
         ranked = []
         for topic in self.load_index():
+            topic_slug = topic["topic"]
+            topic_intent = int(
+                any(hint in query_text for hint in DURABLE_TOPIC_QUERY_HINTS.get(topic_slug, ()))
+            )
             notes = self.load_topic_notes(topic["topic"])
             for note in notes:
                 note_tags = {tag.lower() for tag in note.get("tags", [])}
                 note_tokens = _tokenize(note.get("text", "")) | _tokenize(topic.get("title", "")) | note_tags
                 exact_tag_match = int(bool(query_tokens & note_tags))
                 keyword_overlap = len(query_tokens & note_tokens)
-                if exact_tag_match == 0 and keyword_overlap == 0:
+                if topic_intent == 0 and exact_tag_match == 0 and keyword_overlap == 0:
                     continue
                 recency = _parse_timestamp(note.get("created_at"))
-                ranked.append(((exact_tag_match, keyword_overlap, recency), note))
+                ranked.append(((topic_intent, exact_tag_match, keyword_overlap, recency), note))
         ranked.sort(key=lambda item: item[0], reverse=True)
         return [note for _, note in ranked[:limit]]
 

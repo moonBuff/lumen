@@ -1744,6 +1744,22 @@ def test_user_memory_request_supports_chinese_preference_without_labeled_final(t
     ]
 
 
+def test_cross_session_recall_includes_durable_user_preference_in_prompt(tmp_path):
+    first = build_agent(tmp_path, ["<final>已记住。</final>"])
+
+    first.ask("请记住：我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。")
+
+    second = build_agent(tmp_path, ["<final>你的偏好是用中文回答，并且先讲整体流程再讲模块细节。</final>"])
+    answer = second.ask("你还记得我对回答风格的偏好吗？")
+
+    assert "先讲整体流程再讲模块细节" in answer
+    assert "Relevant memory:\n- 我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。" in second.model_client.prompts[0]
+    assert second.last_prompt_metadata["relevant_memory"]["selected_durable_count"] == 1
+    assert second.last_prompt_metadata["relevant_memory"]["selected_notes"] == [
+        "我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。",
+    ]
+
+
 def test_user_memory_request_rejects_secret_shaped_request_text(tmp_path):
     agent = build_agent(tmp_path, ["<final>Got it.</final>"])
 

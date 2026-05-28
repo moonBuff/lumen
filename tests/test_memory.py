@@ -115,3 +115,27 @@ def test_durable_memory_index_and_topic_notes_are_loaded_and_retrieved(tmp_path)
 
     lines = [line for line in memory.retrieval_view("constrained tools", limit=4).splitlines() if line.startswith("- ")]
     assert any("Use constrained tools instead of guessing." in line for line in lines)
+
+
+def test_durable_user_preferences_are_recalled_by_chinese_preference_intent(tmp_path):
+    memory = LayeredMemory(workspace_root=tmp_path)
+
+    promoted, superseded = memory.promote_durable(
+        [
+            (
+                "user-preferences",
+                "我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。",
+            )
+        ]
+    )
+
+    assert promoted == [
+        "user-preferences: 我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。",
+    ]
+    assert superseded == []
+
+    lines = [line for line in memory.retrieval_view("你还记得我对回答风格的偏好吗？").splitlines() if line.startswith("- ")]
+
+    assert lines == [
+        "- 我偏好你用中文回答，并且解释项目时先讲整体流程，再讲模块细节。",
+    ]
