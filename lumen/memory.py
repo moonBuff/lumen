@@ -49,9 +49,6 @@ def default_memory_state():
         },
         "episodic_notes": [],
         "file_summaries": {},
-        "task": "",
-        "files": [],
-        "notes": [],
         "next_note_index": 0,
     }
 
@@ -337,8 +334,7 @@ def normalize_memory_state(state, workspace_root=None):
     elif not isinstance(state, dict):
         raise TypeError("memory state must be a mapping")
 
-    # 规范化层的作用，是把“磁盘里可能长得不太一样的旧状态”
-    # 统一整理成当前 runtime 可直接使用的紧凑结构。
+    # 规范化只维护当前 memory schema，不做旧字段迁移。
     working = state.get("working")
     if not isinstance(working, dict):
         working = {}
@@ -354,34 +350,16 @@ def normalize_memory_state(state, workspace_root=None):
     )[-WORKING_FILE_LIMIT:]
     state["working"] = working
 
-    if not str(working["task_summary"]).strip() and state.get("task"):
-        working["task_summary"] = clip(str(state.get("task", "")).strip(), 300)
-    if not working["recent_files"] and state.get("files"):
-        working["recent_files"] = _dedupe_preserve_order(
-            [
-                canonicalize_path(path, workspace_root)
-                for path in _ensure_list(state.get("files", []))
-                if str(path).strip()
-            ]
-        )[-WORKING_FILE_LIMIT:]
-
     episodic_notes = state.get("episodic_notes")
     if not isinstance(episodic_notes, list):
         episodic_notes = []
 
-    if not episodic_notes and state.get("notes"):
-        episodic_notes = [
-            _normalize_note(note, index)
-            for index, note in enumerate(_ensure_list(state.get("notes", [])))
-            if str(note).strip()
-        ]
-    else:
-        normalized_notes = []
-        for index, note in enumerate(episodic_notes):
-            if isinstance(note, str) and not str(note).strip():
-                continue
-            normalized_notes.append(_normalize_note(note, index))
-        episodic_notes = normalized_notes
+    normalized_notes = []
+    for index, note in enumerate(episodic_notes):
+        if isinstance(note, str) and not str(note).strip():
+            continue
+        normalized_notes.append(_normalize_note(note, index))
+    episodic_notes = normalized_notes
     episodic_notes = episodic_notes[-EPISODIC_NOTE_LIMIT:]
     state["episodic_notes"] = episodic_notes
 
@@ -415,9 +393,6 @@ def normalize_memory_state(state, workspace_root=None):
     max_index = max([note["note_index"] for note in episodic_notes], default=-1)
     state["next_note_index"] = max(next_note_index, max_index + 1)
 
-    state["task"] = working["task_summary"]
-    state["files"] = list(working["recent_files"])
-    state["notes"] = [note["text"] for note in episodic_notes]
     durable_root = Path(workspace_root) / ".lumen" / "memory" if workspace_root is not None else None
     durable_store = DurableMemoryStore(durable_root) if durable_root is not None else None
     state["durable_topics"] = durable_store.topic_slugs() if durable_store is not None else []
@@ -427,7 +402,6 @@ def normalize_memory_state(state, workspace_root=None):
 def set_task_summary(state, summary, workspace_root=None):
     state = normalize_memory_state(state, workspace_root)
     state["working"]["task_summary"] = clip(str(summary).strip(), 300)
-    state["task"] = state["working"]["task_summary"]
     return state
 
 
@@ -439,7 +413,6 @@ def remember_file(state, path, workspace_root=None):
     files = [item for item in state["working"]["recent_files"] if item != path]
     files.append(path)
     state["working"]["recent_files"] = files[-WORKING_FILE_LIMIT:]
-    state["files"] = list(state["working"]["recent_files"])
     return state
 
 
@@ -465,7 +438,6 @@ def append_note(state, text, tags=(), source="", created_at=None, workspace_root
     notes = [item for item in state["episodic_notes"] if item["text"] != note["text"]]
     notes.append(note)
     state["episodic_notes"] = notes[-EPISODIC_NOTE_LIMIT:]
-    state["notes"] = [item["text"] for item in state["episodic_notes"]]
     return state
 def set_file_summary(state, path, summary, workspace_root=None):
     state = normalize_memory_state(state, workspace_root)

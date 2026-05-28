@@ -13,8 +13,8 @@ def test_working_memory_tracks_summary_and_recent_files():
 
     assert snapshot["working"]["task_summary"] == "Investigate flaky tests"
     assert snapshot["working"]["recent_files"] == ["src/app.py", "README.md"]
-    assert snapshot["task"] == "Investigate flaky tests"
-    assert snapshot["files"] == ["src/app.py", "README.md"]
+    assert "task" not in snapshot
+    assert "files" not in snapshot
 
 
 def test_episodic_notes_append_and_retrieve_deterministically():
@@ -32,12 +32,7 @@ def test_episodic_notes_append_and_retrieve_deterministically():
         "Newest unrelated note",
         "Older unrelated note",
     ]
-    assert snapshot["notes"] == [
-        "Exact tag note",
-        "Keyword overlap note about memory",
-        "Newest unrelated note",
-        "Older unrelated note",
-    ]
+    assert "notes" not in snapshot
 
     lines = [line for line in memory.retrieval_view("recall memory", limit=4).splitlines() if line.startswith("- ")]
     assert lines == [
