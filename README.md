@@ -22,7 +22,7 @@
   - Ollama
   - OpenAI 兼容 Responses API
   - Anthropic 兼容 Messages API
-  - DeepSeek Anthropic 兼容 API
+  - DeepSeek Chat Completions API
 
 ## 使用截图
 
@@ -30,13 +30,9 @@ CLI 帮助信息：
 
 ![lumen help](assets/screenshots/lumen-help.png)
 
-启动界面：
+启动界面与交互提示符：
 
 ![lumen start](assets/screenshots/lumen-start.png)
-
-REPL 内置命令与会话路径：
-
-![lumen repl](assets/screenshots/lumen-repl.png)
 
 ## 安装
 
@@ -153,7 +149,7 @@ LUMEN_DEEPSEEK_MODEL="deepseek-v4-pro"
 uv run lumen --provider deepseek
 ```
 
-默认 DeepSeek base URL 是 `https://api.deepseek.com/anthropic`，走 DeepSeek 的 Anthropic 兼容接口。如果需要改到代理服务，可以设置 `LUMEN_DEEPSEEK_API_BASE` 或启动时传 `--base-url`。
+默认 DeepSeek base URL 是 `https://api.deepseek.com`，走 DeepSeek 的 Chat Completions 接口。如果需要改到代理服务，可以设置 `LUMEN_DEEPSEEK_API_BASE` 或启动时传 `--base-url`。
 
 ## 常用交互命令
 
